@@ -39,7 +39,7 @@ def save_cached_token(token):
 
 
 def validate_cached_token(token):
-    """用 deepseek-v3 发起最小对话，返回非空内容则认为 token 有效。"""
+    """用 Kimi-k3 发起最小对话，返回非空内容则认为 token 有效。"""
     if not token:
         return False
 
@@ -48,7 +48,7 @@ def validate_cached_token(token):
         "messages": [{"role": "user", "content": "你好"}],
         "type": "3",
         "stream": True,
-        "aiType": "deepseek-v3:671b",
+        "aiType": "Kimi-k3",
         "aiSecType": "1",
         "promptTokens": 0,
         "rootAiType": "xinference",
@@ -87,7 +87,7 @@ def validate_cached_token(token):
                 continue
 
             delta = choices[0].get("delta") or {}
-            if delta.get("content") or delta.get("reasoning"):
+            if delta.get("content") or delta.get("reasoning_content") or delta.get("reasoning"):
                 return True
     except Exception:
         logger.exception("Cached token validation failed")

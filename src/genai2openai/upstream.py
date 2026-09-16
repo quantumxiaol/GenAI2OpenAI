@@ -4,6 +4,7 @@ import logging
 import requests
 
 from .config import GENAI_URL, Settings, build_genai_headers
+from .messages import convert_messages_to_genai_format
 from .registry import resolve_model
 
 logger = logging.getLogger("genai-proxy")
@@ -23,10 +24,11 @@ def extract_delta_from_genai(response_data):
         if "choices" in response_data and len(response_data["choices"]) > 0:
             delta = response_data["choices"][0].get("delta", {})
             return {
-                "reasoning": delta.get("reasoning"),
+                # 新版上游字段名为 reasoning_content，兼容旧版 reasoning。
+                "reasoning": delta.get("reasoning_content") or delta.get("reasoning"),
                 "content": delta.get("content"),
             }
-    except (KeyError, IndexError, TypeError):
+    except (KeyError, IndexError, TypeError, AttributeError):
         pass
     return {"reasoning": None, "content": None}
 
@@ -52,8 +54,9 @@ def stream_genai_events(messages, model, max_tokens, settings: Settings, access_
     upstream_model, root_ai_type = resolve_model(model)
 
     # 这里保持与网页端接近的请求体结构，避免上游校验差异。
+    # chatInfo 取最后一条 user 消息，与网页端行为对齐（上游对空 chatInfo 可能不生成内容）。
     genai_data = {
-        "chatInfo": "",
+        "chatInfo": convert_messages_to_genai_format(messages),
         "messages": messages,
         "type": "3",
         "stream": True,
@@ -106,9 +109,23 @@ def stream_genai_events(messages, model, max_tokens, settings: Settings, access_
                     if line_str.startswith('data:'):
                         line_str = line_str[5:].strip()
 
+                    # 新版上游在正常流末尾会追加 `data: [DONE]`。
+                    if line_str == "[DONE]":
+                        break
+
                     if line_str:
                         genai_json = json.loads(line_str)
                         logger.debug("Upstream SSE chunk keys: %s", list(genai_json.keys()))
+
+                        # 上游错误以 {"code":500,"errMsg":"..."} 数据行返回，必须显式透出，
+                        # 否则会被静默吞掉表现为空响应。
+                        if "choices" not in genai_json and genai_json.get("code") not in (None, 0, 200, "200"):
+                            err_msg = genai_json.get("errMsg") or genai_json.get("message") or genai_json
+                            yield {
+                                "type": "error",
+                                "error": f"GenAI upstream error {genai_json.get('code')}: {err_msg}",
+                            }
+                            return
 
                         # 上游偶尔会返回补充元数据，先保留为内部 meta 事件。
                         if genai_json.get("other"):

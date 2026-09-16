@@ -10,7 +10,7 @@ GENAI_IMAGE_STATIC_URL = "https://genaipic.shanghaitech.edu.cn//sys/common/stati
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+    "(KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36 Edg/153.0.0.0"
 )
 
 # 上游网页端请求头模板（不含 X-Access-Token，按请求填充）。
@@ -20,12 +20,12 @@ BASE_GENAI_HEADERS = {
     "Connection": "keep-alive",
     "Content-Type": "application/json",
     "Origin": GENAI_BASE_URL,
-    "Referer": f"{GENAI_BASE_URL}/dialogue",
+    "Referer": f"{GENAI_BASE_URL}/dashboard/analysis",
     "Sec-Fetch-Dest": "empty",
     "Sec-Fetch-Mode": "cors",
     "Sec-Fetch-Site": "same-origin",
     "User-Agent": USER_AGENT,
-    "sec-ch-ua": '"Chromium";v="142", "Google Chrome";v="142", "Not_A Brand";v="99"',
+    "sec-ch-ua": '"Microsoft Edge";v="153", "Not_A Brand";v="8", "Chromium";v="153"',
     "sec-ch-ua-mobile": "?0",
     "sec-ch-ua-platform": '"Windows"',
 }
@@ -79,7 +79,7 @@ def build_startup_genai_headers(token: str) -> dict:
         "Connection": "keep-alive",
         "Content-Type": "application/json",
         "Origin": GENAI_BASE_URL,
-        "Referer": f"{GENAI_BASE_URL}/dialogue",
+        "Referer": f"{GENAI_BASE_URL}/dashboard/analysis",
         "User-Agent": USER_AGENT,
         "X-Access-Token": token,
     }

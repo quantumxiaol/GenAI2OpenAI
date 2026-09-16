@@ -86,31 +86,25 @@ GENAI_UPLOAD_TOKEN=
 - 支持流式（stream）及非流式响应，方便高效地获取 AI 回复。
 - `POST /v1/chat/completions` 支持基于提示词工程和 JSON 解析的 OpenAI `tools`/`tool_choice` 兼容工具调用，也兼容旧版 `functions`/`function_call` 入参。
 - `POST /v1/chat/completions` 支持图片输入（服务端自动上传到 GenAI 图片服务后再发起对话），当前**仅 GPT 系列模型可用**。
-- 提供 `/v1/models` 接口列出可用模型，如 `deepseek-pro`、`deepseek-chat`、`gpt-5.5`、`glm-5.1` 等。
+- 提供 `/v1/models` 接口列出可用模型，如 `kimi-k3`、`deepseek-v4.1`、`gpt-6-astra`、`glm-5.3-flash` 等。
 - 内置 `/health` 健康检查接口，用于服务状态监测。
 
 ### 支持模型
 
-| 模型 id           | 可用性 | 思维链 | 实测上下文长度     | first_token_delay | 输出速度       |
-| ----------------- | ------ | ------ | ------------------ | -------------- | -------------- |
-| deepseek-r1       | ✅     | ✅     | ~100k-128k tokens  | 0.880s         | 73.04 tokens/s | 
-| deepseek-v3       | ✅     | ❌     | ≥200k tokens       | 0.917s         | 83.85 tokens/s | 
-| glm-5.1           | ✅     | ❌     | ≥200k tokens       | 0.874s         | 98.15 tokens/s | 
-| minimax-m1        | ✅     | ✅     | ≥200k tokens       | 0.827s         | 129.94 tokens/s |
-| qwen3.5-397b-a17b | ✅     | ✅     | <100k tokens       | 0.851s         | 2.47 tokens/s  | 
-| gpt-5.5           | ✅     | 隐藏   | 未测试（额度限制） | 5.639s         | 128.93 tokens/s |
-| gpt-5.4           | ✅     | 隐藏   | 未测试（额度限制） | 4.205s         | 107.74 tokens/s |
-| gpt-5.2           | ✅     | 隐藏   | 未测试（额度限制） | 2.940s         | 142.57 tokens/s |
-| gpt-5             | ✅     | 隐藏   | 未测试（额度限制） | 41.525s        | 87.74 tokens/s | 
-| gpt-4.1           | ✅     | 隐藏   | 未测试（额度限制） | 2.534s         | 133.66 tokens/s |
-| gpt-4.1-mini      | ✅     | 隐藏   | 未测试（额度限制） | 2.385s         | 81.96 tokens/s | 
-| gpt-o4-mini       | ✅     | 隐藏   | 未测试（额度限制） | 11.030s        | 175.94 tokens/s |
-| gpt-o3            | ✅     | 隐藏   | 未测试（额度限制） | 11.612s        | 254.31 tokens/s |
-| deepseek-pro      | ✅     | 未知   | 未测试             | 1.012s         | 62.13 tokens/s | 
-| deepseek-chat     | ✅     | 未知   | 未测试             | 0.983s         | 19.62 tokens/s | 
+| 模型 id         | 路由              | 思维链                 | 备注                         |
+| --------------- | ----------------- | ---------------------- | ---------------------------- |
+| kimi-k3         | 本地（不限量）    | ✅ `reasoning_content` | 2026-09-16 已验证            |
+| deepseek-v4.1   | 本地（不限量）    | 未知                   |                              |
+| glm-5.3-flash   | 本地（不限量）    | 未知                   |                              |
+| qwen-3.8        | 本地（不限量）    | 未知                   |                              |
+| gpt-6-astra     | Azure（100万 tokens/月） | 隐藏              |                              |
+| gpt-5.6-sol     | Azure（100万 tokens/月） | 隐藏              |                              |
+| gpt-5.6-terra   | Azure（100万 tokens/月） | 隐藏              |                              |
+| gpt-5.6-luna    | Azure（100万 tokens/月） | 隐藏              |                              |
 
-兼容层同时兼容历史请求名和底层模型名，详见[模型列表](docs/模型列表.md)。
-以上信息最后更新于 `2026-05-08`。
+兼容层同时兼容上游请求名和实际模型名，详见[模型列表](docs/模型列表.md)。
+旧版模型（deepseek-v3/r1、gpt-5.5 等）已于 2026 年 9 月平台升级后全部下线。
+以上信息最后更新于 `2026-09-16`，性能数据请用 `tools/benchmark_models.py` 实测。
 
 ### 测试模型上下文长度
 
@@ -118,10 +112,10 @@ GENAI_UPLOAD_TOKEN=
 
 ```bash
 # 大海捞针测试（推荐）
-uv run tools/skills/context_length_tester/context_length_tester.py --model deepseek-v3
+uv run tools/skills/context_length_tester/context_length_tester.py --model kimi-k3
 
 # 快速探测 API 上限
-uv run tools/skills/context_length_tester/context_length_tester.py --model deepseek-v3 --mode probe
+uv run tools/skills/context_length_tester/context_length_tester.py --model kimi-k3 --mode probe
 ```
 
 测试方法采用**大海捞针法**（Needle in a Haystack）：在长文本中间插入关键信息，验证模型能否准确检索。这比简单的二分查找更能反映模型的真实上下文处理能力。
@@ -134,7 +128,7 @@ uv run tools/skills/context_length_tester/context_length_tester.py --model deeps
 
 ```json
 {
-  "model": "gpt-5.5",
+  "model": "gpt-6-astra",
   "messages": [{ "role": "user", "content": "上海今天适合带伞吗？" }],
   "tools": [
     {
@@ -180,7 +174,7 @@ uv run tools/skills/context_length_tester/context_length_tester.py --model deeps
 
 限制：
 
-- 图片能力仅对 GPT/Azure 路由模型开放（如 `gpt-5.5`、`gpt-4.1`）。
+- 图片能力仅对 GPT/Azure 路由模型开放（如 `gpt-6-astra`、`gpt-5.6-sol`）。
 - 若对非 GPT 模型传图，请求会返回错误：`Image input is only available for GPT models`。
 
 示例：
@@ -190,7 +184,7 @@ curl http://127.0.0.1:5000/v1/chat/completions \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "gpt-5.5",
+    "model": "gpt-6-astra",
     "messages": [
       {
         "role": "user",
