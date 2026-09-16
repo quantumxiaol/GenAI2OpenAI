@@ -209,15 +209,16 @@ def chat_completions():
     """
     settings = current_app.config[SETTINGS_CONFIG_KEY]
     try:
-        req_data = request.get_json()
+        # silent=True：畸形 JSON 返回 None，走下面的 400，而不是抛 BadRequest 变成 500。
+        req_data = request.get_json(silent=True)
         logger.debug("/v1/chat/completions request received: stream=%s model=%s", (req_data or {}).get('stream'), (req_data or {}).get('model'))
 
         # Chat Completions 至少需要消息数组。
         if not req_data or 'messages' not in req_data:
-            return jsonify({'error': 'Missing messages field'}), 400
+            return jsonify({'error': 'Missing or invalid JSON body / missing messages field'}), 400
 
         messages = req_data.get('messages', [])
-        model = req_data.get('model', 'gpt-3.5-turbo')
+        model = req_data.get('model', 'kimi-k3')
         stream = req_data.get('stream', False)
         max_tokens = req_data.get('max_tokens', req_data.get('max_completion_tokens', 30000))
         tools = get_request_tools(req_data)

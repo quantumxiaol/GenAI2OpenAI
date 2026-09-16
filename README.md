@@ -91,20 +91,20 @@ GENAI_UPLOAD_TOKEN=
 
 ### 支持模型
 
-| 模型 id         | 路由              | 思维链                 | 备注                         |
-| --------------- | ----------------- | ---------------------- | ---------------------------- |
-| kimi-k3         | 本地（不限量）    | ✅ `reasoning_content` | 2026-09-16 已验证            |
-| deepseek-v4.1   | 本地（不限量）    | 未知                   |                              |
-| glm-5.3-flash   | 本地（不限量）    | 未知                   |                              |
-| qwen-3.8        | 本地（不限量）    | 未知                   |                              |
-| gpt-6-astra     | Azure（100万 tokens/月） | 隐藏              |                              |
-| gpt-5.6-sol     | Azure（100万 tokens/月） | 隐藏              |                              |
-| gpt-5.6-terra   | Azure（100万 tokens/月） | 隐藏              |                              |
-| gpt-5.6-luna    | Azure（100万 tokens/月） | 隐藏              |                              |
+| 模型 id         | 路由                   | 思维链                 | first_token_delay | 输出速度        |
+| --------------- | ---------------------- | ---------------------- | ----------------- | --------------- |
+| kimi-k3         | 本地（不限量）         | ✅ `reasoning_content` | 0.489s            | 11.57 tokens/s  |
+| deepseek-v4.1   | 本地（不限量）         | 未知                   | 0.117s            | 449.95 tokens/s |
+| glm-5.3-flash   | 本地（不限量）         | 未知                   | 0.198s            | 403.89 tokens/s |
+| qwen-3.8        | 本地（不限量）         | 未知                   | 0.214s            | 411.43 tokens/s |
+| gpt-6-astra     | Azure（100万 tokens/月）| 隐藏                  | 8.420s            | 75.30 tokens/s  |
+| gpt-5.6-sol     | Azure（100万 tokens/月）| 隐藏                  | 3.412s            | 122.54 tokens/s |
+| gpt-5.6-terra   | Azure（100万 tokens/月）| 隐藏                  | 4.784s            | 172.85 tokens/s |
+| gpt-5.6-luna    | Azure（100万 tokens/月）| 隐藏                  | 4.100s            | 391.74 tokens/s |
 
 兼容层同时兼容上游请求名和实际模型名，详见[模型列表](docs/模型列表.md)。
 旧版模型（deepseek-v3/r1、gpt-5.5 等）已于 2026 年 9 月平台升级后全部下线。
-以上信息最后更新于 `2026-09-16`，性能数据请用 `tools/benchmark_models.py` 实测。
+性能数据由 `tools/benchmark_models.py` 实测（约 300 字中文生成任务），更新于 `2026-09-16`。kimi-k3 输出速度低是因为思维链较长，正文生成速度实际更快。
 
 ### 测试模型上下文长度
 

@@ -169,12 +169,13 @@ def responses():
     """
     settings = current_app.config[SETTINGS_CONFIG_KEY]
     try:
-        req_data = request.get_json()
+        # silent=True：畸形 JSON 返回 None，走下面的 400，而不是抛 BadRequest 变成 500。
+        req_data = request.get_json(silent=True)
         logger.debug("/v1/responses request received: stream=%s model=%s", (req_data or {}).get('stream'), (req_data or {}).get('model'))
         if not req_data or 'input' not in req_data:
-            return jsonify({'error': 'Missing input field'}), 400
+            return jsonify({'error': 'Missing or invalid JSON body / missing input field'}), 400
 
-        model = req_data.get('model', 'gpt-4.1')
+        model = req_data.get('model', 'kimi-k3')
         stream = req_data.get('stream', False)
         max_output_tokens = req_data.get('max_output_tokens', req_data.get('max_tokens', 30000))
         messages = build_response_input_messages(req_data.get('input'))

@@ -52,7 +52,7 @@ def main():
     if not settings.token:
         cached_token = load_cached_token()
         if cached_token:
-            logging.getLogger("genai-proxy").info("Found cached token, validating with deepseek-v3")
+            logging.getLogger("genai-proxy").info("Found cached token, validating with Kimi-k3")
             if validate_cached_token(cached_token):
                 settings.token = cached_token
                 logging.getLogger("genai-proxy").info("Cached token is valid")
