@@ -1,7 +1,7 @@
 import argparse
 import json
 
-from cas_login import LoginError, login_genai
+from .cas import LoginError, login_genai
 
 
 def main():

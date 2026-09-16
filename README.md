@@ -41,10 +41,27 @@ GenAI 是一个基于 Flask 的聊天机器人接口服务，兼容 OpenAI 的�
 ### 启动服务
 
 ```bash
-uv run main.py [--token <token>] [--account <student_id@password>] [--upload-token <upload_token>] [--log-level INFO] [--port 5000]
+uv run genai2openai [--token <token>] [--account <student_id@password>] [--upload-token <upload_token>] [--log-level INFO] [--port 5000]
 ```
 
-端口默认 5000。服务将在本地 `0.0.0.0:5000` 端口启动。
+端口默认 5000。服务将在本地 `0.0.0.0:5000` 端口启动。`uv run main.py` 与 `uv run python -m genai2openai` 是等价的兼容入口。
+
+### 项目结构
+
+```
+src/genai2openai/       # 主包（标准 SRC 布局）
+├── cli.py              # 命令行入口、启动时 token 流程
+├── config.py           # 上游地址、请求头与运行时配置
+├── registry.py         # 模型映射表与远端模型发现
+├── auth.py             # token 缓存 / 校验 / 请求头提取
+├── cas.py              # 统一身份认证（CAS）自动登录
+├── images.py           # 图片上传与缓存
+├── messages.py         # OpenAI 消息到上游格式的归一化
+├── tool_calling.py     # 工具调用兼容层（提示词 + 本地解析）
+├── upstream.py         # GenAI SSE 上游客户端
+└── routes/             # Flask 路由：chat / responses / meta
+tools/                  # 客户端工具（benchmark、上下文长度测试），不属于主包
+```
 
 可选参数：
 
@@ -187,7 +204,13 @@ curl http://127.0.0.1:5000/v1/chat/completions \
 2. 打开浏览器开发者工具，随便发送一条消息，捕获名为`chat`的请求
 3. 复制请求标头中的`x-access-token`字段，即为`<token>`
 
-服务启动时可通过 `--token <token>` 设置默认 GenAI token；也可通过 `--account <学号@密码>` 在启动时自动登录获取 token。客户端也可以通过传统的 API key 传递 token，此时请求级 key 会覆盖启动参数中的默认 token，并作为上游 GenAI 的 `X-Access-Token` 使用。
+服务启动时可通过 `--token <token>` 设置默认 GenAI token；也可通过 `--account <学号@密码>` 在启动时自动登录获取 token（成功后会缓存到当前目录的 `.genai_token_cache`，下次启动自动复用）。也可以单独运行登录工具仅获取 token：
+
+```bash
+uv run genai2openai-login --credential '学号@密码'
+```
+
+客户端也可以通过传统的 API key 传递 token，此时请求级 key 会覆盖启动参数中的默认 token，并作为上游 GenAI 的 `X-Access-Token` 使用。
 
 支持的请求头：
 

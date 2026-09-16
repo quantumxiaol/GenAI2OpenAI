@@ -6,8 +6,7 @@ import requests
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad
 
-GENAI_BASE_URL = "https://genai.shanghaitech.edu.cn"
-IDS_BASE_URL = "https://ids.shanghaitech.edu.cn"
+from .config import GENAI_BASE_URL, IDS_BASE_URL
 
 
 class LoginError(Exception):
