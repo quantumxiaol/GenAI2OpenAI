@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass
 
 GENAI_BASE_URL = "https://genai.shanghaitech.edu.cn"
@@ -30,13 +31,35 @@ BASE_GENAI_HEADERS = {
 }
 
 
+DEFAULT_UPLOAD_TOKEN = "2ea38f293adb4abca21132feba61eaa3"
+
+
+def load_dotenv(path=".env"):
+    """极简 .env 加载：KEY=VALUE 逐行读入环境变量，不覆盖已存在的变量。"""
+    if not os.path.exists(path):
+        return
+    try:
+        with open(path, "r", encoding="utf-8") as env_file:
+            for line in env_file:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, _, value = line.partition("=")
+                key = key.strip()
+                value = value.strip().strip('"').strip("'")
+                if key and key not in os.environ:
+                    os.environ[key] = value
+    except OSError:
+        pass
+
+
 @dataclass
 class Settings:
     """运行时配置，由 CLI 参数构建并随 Flask app 分发。"""
 
     token: str | None = None
     account: str | None = None
-    upload_token: str = "2ea38f293adb4abca21132feba61eaa3"
+    upload_token: str = DEFAULT_UPLOAD_TOKEN
     port: int = 5000
     log_level: str = "INFO"
 

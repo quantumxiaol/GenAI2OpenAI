@@ -70,6 +70,16 @@ tools/                  # 客户端工具（benchmark、上下文长度测试）
 - `--upload-token`：图片上传接口 `token` 请求头值（默认内置项目当前可用值）。
 - `--log-level`：控制台日志级别，支持 `DEBUG / INFO / WARNING / ERROR / CRITICAL`，默认 `INFO`。
 
+三个认证相关参数也可以写进项目根目录的 `.env` 文件（已 gitignore，参考 `.env.example`），避免密码出现在命令行和进程列表中：
+
+```bash
+GENAI_ACCOUNT=学号@密码
+GENAI_TOKEN=eyJ...
+GENAI_UPLOAD_TOKEN=
+```
+
+命令行参数优先于 `.env`。
+
 ## 功能和用法
 
 - 兼容 OpenAI API，支持 `POST /v1/chat/completions`、`POST /v1/responses`接口，实现智能聊天功能。
