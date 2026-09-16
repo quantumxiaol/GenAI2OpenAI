@@ -127,6 +127,42 @@ def is_gpt_model(model_name):
     return root_ai_type == "azure"
 
 
+# 模型名尾部功能后缀：映射到上游请求体开关。
+# 例如 kimi-k3-search、kimi-k3-nothink、kimi-k3-search-thinking。
+MODEL_FLAG_SUFFIXES = {
+    "-search": ("net_go", True),      # 联网搜索（上游字段 netGo）
+    "-thinking": ("thinking", True),  # 深度思考开（上游字段 thinking）
+    "-nothink": ("thinking", False),  # 深度思考关
+}
+
+
+def parse_model_flags(model_name):
+    """剥离模型名尾部的功能后缀，返回 (基础模型名, 开关字典)。
+
+    Args:
+        model_name (Any): 调用方传入的模型名，可能带 -search/-thinking/-nothink 后缀。
+
+    Returns:
+        tuple[Any, dict]: (去掉后缀的基础模型名, {"net_go": bool, "thinking": bool} 子集)。
+    """
+    flags = {}
+    if not isinstance(model_name, str):
+        return model_name, flags
+
+    base = model_name
+    lowered = base.lower()
+    changed = True
+    while changed:
+        changed = False
+        for suffix, (key, value) in MODEL_FLAG_SUFFIXES.items():
+            if lowered.endswith(suffix) and key not in flags:
+                flags[key] = value
+                base = base[: -len(suffix)]
+                lowered = base.lower()
+                changed = True
+    return base, flags
+
+
 def fetch_remote_models(settings: Settings, access_token: str | None = None):
     """拉取 GenAI 平台当前可用模型列表。"""
     response = requests.get(

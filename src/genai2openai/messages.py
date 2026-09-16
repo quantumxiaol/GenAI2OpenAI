@@ -23,6 +23,29 @@ def convert_messages_to_genai_format(messages):
     return chat_info
 
 
+def split_chat_info(messages):
+    """按上游语义拆分：chatInfo 为本轮提问，messages 为之前的历史消息。
+
+    网页端请求体中 messages 不含本轮提问（本轮在 chatInfo 中），上游会将二者
+    拼接；若不拆分，模型会看到两遍最后一条用户消息。
+
+    Args:
+        messages (list[dict]): 归一化后的 OpenAI 风格消息列表。
+
+    Returns:
+        tuple[str, list[dict]]: (chatInfo, 去掉最后一条 user 消息的消息列表)。
+    """
+    chat_info = ""
+    trimmed = list(messages)
+    for index in range(len(trimmed) - 1, -1, -1):
+        if trimmed[index].get("role") == "user":
+            content = trimmed[index].get("content", "")
+            chat_info = content if isinstance(content, str) else str(content)
+            del trimmed[index]
+            break
+    return chat_info, trimmed
+
+
 def normalize_content_for_genai(content):
     """将 OpenAI 消息 content 归一化为上游可读文本。"""
     if content is None:

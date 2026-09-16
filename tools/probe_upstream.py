@@ -9,6 +9,11 @@
     # 用指定模型发一条消息，原样打印上游返回的 SSE 报文
     uv run tools/probe_upstream.py --ai-type Kimi-k3 --root-ai-type xinference
 
+    # 验证功能开关（联网搜索 / 深度思考 / 固定会话分组）
+    uv run tools/probe_upstream.py --ai-type deepseek-pro --net-go --prompt "上科大最近新闻"
+    uv run tools/probe_upstream.py --ai-type Kimi-k3 --nothink --prompt "say hi"
+    uv run tools/probe_upstream.py --ai-type deepseek-pro --chat-group-id ApiTest001 --prompt "hi"
+
     # 默认从 .genai_token_cache 读 token，也可以用 --token 显式指定
     uv run tools/probe_upstream.py --token eyJ... --ai-type deepseek-pro --prompt "hello"
 """
@@ -32,6 +37,11 @@ def parse_args():
     parser.add_argument("--prompt", default="say hello", help="test prompt")
     parser.add_argument("--max-token", type=int, default=256, help="maxToken sent upstream")
     parser.add_argument("--url", default=GENAI_URL, help="upstream chat URL (default: config.GENAI_URL)")
+    parser.add_argument("--net-go", action="store_true", help="enable web search (upstream netGo)")
+    thinking_group = parser.add_mutually_exclusive_group()
+    thinking_group.add_argument("--thinking", action="store_true", help="enable deep thinking (upstream thinking)")
+    thinking_group.add_argument("--nothink", action="store_true", help="explicitly disable deep thinking")
+    parser.add_argument("--chat-group-id", default=None, help="send a fixed chatGroupId")
     return parser.parse_args()
 
 
@@ -58,6 +68,14 @@ def main():
         "rootAiType": args.root_ai_type,
         "maxToken": args.max_token,
     }
+    if args.net_go:
+        payload["netGo"] = True
+    if args.thinking:
+        payload["thinking"] = True
+    elif args.nothink:
+        payload["thinking"] = False
+    if args.chat_group_id:
+        payload["chatGroupId"] = args.chat_group_id
     print("POST", args.url)
     print("payload:", json.dumps(payload, ensure_ascii=False))
     print("---")

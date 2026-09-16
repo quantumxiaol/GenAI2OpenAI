@@ -15,6 +15,7 @@ from flask import (
 from ..auth import get_request_access_token
 from ..images import prepare_image_payload
 from ..messages import convert_messages_to_genai_format, normalize_messages_for_genai
+from ..registry import parse_model_flags
 from ..tool_calling import (
     build_tool_calling_messages,
     get_request_tool_choice,
@@ -61,7 +62,8 @@ def build_chat_completion_payload(model, content, reasoning_content=None, tool_c
     }
 
 
-def stream_chat_completions_response(messages, model, max_tokens, settings, access_token=None, image_payload=None):
+def stream_chat_completions_response(messages, model, max_tokens, settings, access_token=None, image_payload=None,
+                                     net_go=False, thinking=None):
     """将内部事件流转换为 Chat Completions SSE。
 
     Args:
@@ -70,6 +72,8 @@ def stream_chat_completions_response(messages, model, max_tokens, settings, acce
         max_tokens (int | None): 最大输出 token 数。
         settings (Settings): 运行时配置。
         access_token (str | None): 请求级 GenAI token，未提供时使用启动参数。
+        net_go (bool): 联网搜索开关。
+        thinking (bool | None): 深度思考开关；None 跟随上游默认。
 
     Yields:
         str: 符合 OpenAI Chat Completions SSE 格式的文本片段。
@@ -77,7 +81,8 @@ def stream_chat_completions_response(messages, model, max_tokens, settings, acce
     response_id = f"chatcmpl-{uuid.uuid4().hex[:24]}"
     created = int(datetime.now().timestamp())
 
-    for event in stream_genai_events(messages, model, max_tokens, settings, access_token, image_payload):
+    for event in stream_genai_events(messages, model, max_tokens, settings, access_token, image_payload,
+                                     net_go, thinking):
         if event["type"] == "error":
             yield f"data: {json.dumps({'error': event['error']})}\n\n"
             return
@@ -218,7 +223,10 @@ def chat_completions():
             return jsonify({'error': 'Missing or invalid JSON body / missing messages field'}), 400
 
         messages = req_data.get('messages', [])
-        model = req_data.get('model', 'kimi-k3')
+        # 模型名可带功能后缀（-search/-thinking/-nothink），显式字段 net_go/thinking 优先。
+        model, model_flags = parse_model_flags(req_data.get('model', 'kimi-k3'))
+        net_go = req_data.get('net_go', model_flags.get('net_go', False))
+        thinking = req_data.get('thinking', model_flags.get('thinking'))
         stream = req_data.get('stream', False)
         max_tokens = req_data.get('max_tokens', req_data.get('max_completion_tokens', 30000))
         tools = get_request_tools(req_data)
@@ -239,7 +247,8 @@ def chat_completions():
 
         if stream:
             if tools_enabled:
-                collected = collect_genai_response(upstream_messages, model, max_tokens, settings, access_token, image_payload)
+                collected = collect_genai_response(upstream_messages, model, max_tokens, settings, access_token, image_payload,
+                                                   net_go, thinking)
                 tool_calls = parse_tool_calls_from_content(collected["content"])
                 return Response(
                     stream_with_context(stream_tool_calls_response(model, collected["content"], tool_calls)),
@@ -248,13 +257,15 @@ def chat_completions():
                 )
 
             return Response(
-                stream_with_context(stream_chat_completions_response(upstream_messages, model, max_tokens, settings, access_token, image_payload)),
+                stream_with_context(stream_chat_completions_response(upstream_messages, model, max_tokens, settings, access_token, image_payload,
+                                                                     net_go, thinking)),
                 mimetype='text/event-stream',
                 headers=SSE_HEADERS,
             )
 
         # 非流式模式先完整收集，再一次性组装 OpenAI 响应体。
-        collected = collect_genai_response(upstream_messages, model, max_tokens, settings, access_token, image_payload)
+        collected = collect_genai_response(upstream_messages, model, max_tokens, settings, access_token, image_payload,
+                                           net_go, thinking)
         tool_calls = parse_tool_calls_from_content(collected["content"]) if tools_enabled else []
         response = build_chat_completion_payload(
             model,

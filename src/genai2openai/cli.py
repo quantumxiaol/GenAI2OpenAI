@@ -24,6 +24,8 @@ def parse_args():
     parser.add_argument('--log-level', type=str, default='INFO',
                         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
                         help='Console log level (default: INFO)')
+    parser.add_argument('--chat-group-id', type=str, default=None,
+                        help='固定上游会话分组 ID：所有 API 请求归入网页版同一条会话，避免刷屏 (也可在 .env 中配置 GENAI_CHAT_GROUP_ID；默认不发送)')
     return parser.parse_args()
 
 
@@ -46,6 +48,7 @@ def main():
         upload_token=args.upload_token or os.environ.get("GENAI_UPLOAD_TOKEN") or DEFAULT_UPLOAD_TOKEN,
         port=args.port,
         log_level=args.log_level,
+        chat_group_id=args.chat_group_id or os.environ.get("GENAI_CHAT_GROUP_ID"),
     )
     setup_logging(settings.log_level)
 

@@ -202,6 +202,24 @@ curl http://127.0.0.1:5000/v1/chat/completions \
   }'
 ```
 
+### 联网搜索与深度思考
+
+上游的联网搜索（`netGo`）和深度思考（`thinking`）开关通过**模型名后缀**或**请求体显式字段**开启（显式字段优先）：
+
+| 功能 | 模型名后缀 | 请求体字段 |
+| ---- | ---------- | ---------- |
+| 联网搜索 | `kimi-k3-search` | `"net_go": true` |
+| 深度思考开 | `kimi-k3-thinking` | `"thinking": true` |
+| 深度思考关 | `kimi-k3-nothink` | `"thinking": false` |
+
+- 后缀可组合，如 `kimi-k3-search-thinking`；适用于全部模型，大小写不敏感。
+- 不指定时跟随上游默认（如 Kimi-K3 默认输出思维链，可用 `-nothink` 关闭提速）。
+- 联网检索结果直接融入回答文本（含引用标记），无额外返回字段。
+
+### 会话记录
+
+默认情况下，每次 API 请求都会以最后一条用户消息为标题，在 GenAI 网页版会话列表中创建一条新会话。如需避免刷屏，启动时加 `--chat-group-id <固定串>`（或 `.env` 中配置 `GENAI_CHAT_GROUP_ID`），所有 API 请求会归入网页版同一条会话。
+
 ## Token 获取
 
 1. 首先前往[GenAI 对话平台](https://genai.shanghaitech.edu.cn/dialogue)

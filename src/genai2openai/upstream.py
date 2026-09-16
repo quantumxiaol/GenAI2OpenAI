@@ -4,7 +4,7 @@ import logging
 import requests
 
 from .config import GENAI_URL, Settings, build_genai_headers
-from .messages import convert_messages_to_genai_format
+from .messages import split_chat_info
 from .registry import resolve_model
 
 logger = logging.getLogger("genai-proxy")
@@ -33,7 +33,8 @@ def extract_delta_from_genai(response_data):
     return {"reasoning": None, "content": None}
 
 
-def stream_genai_events(messages, model, max_tokens, settings: Settings, access_token=None, image_payload=None):
+def stream_genai_events(messages, model, max_tokens, settings: Settings, access_token=None, image_payload=None,
+                        net_go=False, thinking=None):
     """调用 GenAI 流式接口并产出统一事件流。
 
     该函数是整个协议转换的底层入口，负责：
@@ -43,10 +44,12 @@ def stream_genai_events(messages, model, max_tokens, settings: Settings, access_
 
     Args:
         messages (list[dict]): 发送给上游的消息列表。
-        model (str): 调用方指定的模型名。
+        model (str): 调用方指定的模型名（已剥离功能后缀）。
         max_tokens (int | None): 最大输出 token 数。
         settings (Settings): 运行时配置（上游 token、请求头等）。
         access_token (str | None): 请求级 GenAI token，未提供时使用启动参数。
+        net_go (bool): 联网搜索开关（上游字段 netGo）。
+        thinking (bool | None): 深度思考开关；None 表示不发送该字段，跟随上游默认。
 
     Yields:
         dict: 统一事件对象，`type` 可能为 `delta`、`done`、`meta` 或 `error`。
@@ -54,10 +57,12 @@ def stream_genai_events(messages, model, max_tokens, settings: Settings, access_
     upstream_model, root_ai_type = resolve_model(model)
 
     # 这里保持与网页端接近的请求体结构，避免上游校验差异。
-    # chatInfo 取最后一条 user 消息，与网页端行为对齐（上游对空 chatInfo 可能不生成内容）。
+    # 上游语义为 chatInfo（本轮提问）+ messages（历史消息）拼接，需拆分，
+    # 否则模型会看到两遍最后一条用户消息。
+    chat_info, history_messages = split_chat_info(messages)
     genai_data = {
-        "chatInfo": convert_messages_to_genai_format(messages),
-        "messages": messages,
+        "chatInfo": chat_info,
+        "messages": history_messages,
         "type": "3",
         "stream": True,
         "aiType": upstream_model,
@@ -66,6 +71,12 @@ def stream_genai_events(messages, model, max_tokens, settings: Settings, access_
         "rootAiType": root_ai_type,
         "maxToken": max_tokens or 30000
     }
+    if net_go:
+        genai_data["netGo"] = True
+    if thinking is not None:
+        genai_data["thinking"] = thinking
+    if settings.chat_group_id:
+        genai_data["chatGroupId"] = settings.chat_group_id
     if image_payload:
         genai_data.update(image_payload)
 
@@ -176,7 +187,8 @@ def stream_genai_events(messages, model, max_tokens, settings: Settings, access_
         }
 
 
-def collect_genai_response(messages, model, max_tokens, settings: Settings, access_token=None, image_payload=None):
+def collect_genai_response(messages, model, max_tokens, settings: Settings, access_token=None, image_payload=None,
+                           net_go=False, thinking=None):
     """收集完整响应并聚合为非流式结果。
 
     Args:
@@ -185,6 +197,8 @@ def collect_genai_response(messages, model, max_tokens, settings: Settings, acce
         max_tokens (int | None): 最大输出 token 数。
         settings (Settings): 运行时配置。
         access_token (str | None): 请求级 GenAI token，未提供时使用启动参数。
+        net_go (bool): 联网搜索开关。
+        thinking (bool | None): 深度思考开关；None 跟随上游默认。
 
     Returns:
         dict[str, str | None]: 聚合后的正文、思维链和上游模型名。
@@ -196,7 +210,8 @@ def collect_genai_response(messages, model, max_tokens, settings: Settings, acce
     reasoning_parts = []
     upstream_model = None
 
-    for event in stream_genai_events(messages, model, max_tokens, settings, access_token, image_payload):
+    for event in stream_genai_events(messages, model, max_tokens, settings, access_token, image_payload,
+                                     net_go, thinking):
         if event["type"] == "error":
             raise RuntimeError(event["error"])
         if event["type"] == "delta":

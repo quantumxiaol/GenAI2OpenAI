@@ -62,6 +62,9 @@ class Settings:
     upload_token: str = DEFAULT_UPLOAD_TOKEN
     port: int = 5000
     log_level: str = "INFO"
+    # 固定上游会话分组 ID：所有 API 请求归入网页版同一条会话；
+    # 为空则不发送，每次请求在网页版各自建一条会话。
+    chat_group_id: str | None = None
 
 
 def build_genai_headers(settings: Settings, access_token: str | None = None) -> dict:
