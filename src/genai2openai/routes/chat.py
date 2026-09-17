@@ -275,6 +275,8 @@ def chat_completions():
             if tools_enabled:
                 collected = collect_genai_response(upstream_messages, model, max_tokens, settings, access_token, image_payload,
                                                    net_go, thinking)
+                # 记录原始输出，便于定位"模型只宣布不调用"之类的解析失败。
+                logger.debug("tools path raw content (first 500): %r", collected["content"][:500])
                 tool_calls = parse_tool_calls_from_content(collected["content"])
                 return Response(
                     stream_with_context(stream_tool_calls_response(model, collected["content"], tool_calls)),
@@ -292,6 +294,8 @@ def chat_completions():
         # 非流式模式先完整收集，再一次性组装 OpenAI 响应体。
         collected = collect_genai_response(upstream_messages, model, max_tokens, settings, access_token, image_payload,
                                            net_go, thinking)
+        if tools_enabled:
+            logger.debug("tools path raw content (first 500): %r", collected["content"][:500])
         tool_calls = parse_tool_calls_from_content(collected["content"]) if tools_enabled else []
         response = build_chat_completion_payload(
             model,

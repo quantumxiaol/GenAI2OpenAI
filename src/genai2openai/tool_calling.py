@@ -76,9 +76,14 @@ def build_tool_calling_messages(messages, tools, tool_choice):
     elif isinstance(normalized_choice, dict):
         tool_prompt.append(f"本次请求必须调用工具 {normalized_choice['name']}。")
 
+    # 尾部再放一条简短提醒：长工具循环中位置 0 的系统提示会被稀释，
+    # 导致模型只"宣布"要调工具却不输出调用 JSON。
+    reminder = "提醒：如果本轮需要调用工具，请直接输出 tool_calls JSON，不要在输出调用前先写解释文字；不需要工具时才用文字回答。"
+
     return [
         {"role": "system", "content": "\n".join(tool_prompt)},
         *messages,
+        {"role": "system", "content": reminder},
     ]
 
 
