@@ -233,6 +233,15 @@ def chat_completions():
         tool_choice = get_request_tool_choice(req_data)
         access_token = get_request_access_token(settings)
         image_payload = prepare_image_payload(messages, model, settings, access_token)
+        # 定位"harness 是否真把 tools 发过来了"用的诊断日志。
+        logger.debug(
+            "chat request detail: tools=%d tool_choice=%r net_go=%s thinking=%s roles=%s",
+            len(tools),
+            tool_choice,
+            net_go,
+            thinking,
+            [m.get("role") for m in messages][:20] if isinstance(messages, list) else type(messages).__name__,
+        )
 
         # 转换消息格式
         chat_info = convert_messages_to_genai_format(messages)
