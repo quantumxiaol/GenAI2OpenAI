@@ -33,6 +33,16 @@ def extract_delta_from_genai(response_data):
     return {"reasoning": None, "content": None}
 
 
+def _parse_total_tokens(other):
+    """从上游 other 元数据（字符串化 JSON）中解析真实 totalTokens。"""
+    try:
+        payload = json.loads(other) if isinstance(other, str) else other
+        total = payload.get("totalTokens") if isinstance(payload, dict) else None
+        return total if isinstance(total, int) else None
+    except (json.JSONDecodeError, TypeError):
+        return None
+
+
 def stream_genai_events(messages, model, max_tokens, settings: Settings, access_token=None, image_payload=None,
                         net_go=False, thinking=None):
     """调用 GenAI 流式接口并产出统一事件流。
@@ -107,79 +117,81 @@ def stream_genai_events(messages, model, max_tokens, settings: Settings, access_
             }
             return
 
-        finished = False
         logged_first_chunk = False
+        saw_finish = False
+        final_upstream_model = None
+        usage_total = None
         for line in response.iter_lines():
-            if finished:
-                break
+            if not line:
+                continue
 
-            if line:
-                try:
-                    line_str = line.decode('utf-8') if isinstance(line, bytes) else line
+            try:
+                line_str = line.decode('utf-8') if isinstance(line, bytes) else line
 
-                    # 兼容标准 SSE 的 `data:` 前缀。
-                    if line_str.startswith('data:'):
-                        line_str = line_str[5:].strip()
+                # 兼容标准 SSE 的 `data:` 前缀。
+                if line_str.startswith('data:'):
+                    line_str = line_str[5:].strip()
 
-                    # 新版上游在正常流末尾会追加 `data: [DONE]`。
-                    if line_str == "[DONE]":
-                        break
+                # 上游在 `[DONE]` 之后还会发 other 元数据（含真实 token 数），
+                # 不要 break，继续读到流结束。
+                if line_str == "[DONE]":
+                    continue
 
-                    if line_str:
-                        genai_json = json.loads(line_str)
-                        # 每个请求只记录首个 chunk 的 keys，避免刷屏。
-                        if not logged_first_chunk:
-                            logger.debug("Upstream first SSE chunk keys: %s", list(genai_json.keys()))
-                            logged_first_chunk = True
+                if line_str:
+                    genai_json = json.loads(line_str)
+                    # 每个请求只记录首个 chunk 的 keys，避免刷屏。
+                    if not logged_first_chunk:
+                        logger.debug("Upstream first SSE chunk keys: %s", list(genai_json.keys()))
+                        logged_first_chunk = True
 
-                        # 上游错误以 {"code":500,"errMsg":"..."} 数据行返回，必须显式透出，
-                        # 否则会被静默吞掉表现为空响应。
-                        if "choices" not in genai_json and genai_json.get("code") not in (None, 0, 200, "200"):
-                            err_msg = genai_json.get("errMsg") or genai_json.get("message") or genai_json
-                            yield {
-                                "type": "error",
-                                "error": f"GenAI upstream error {genai_json.get('code')}: {err_msg}",
-                            }
-                            return
+                    # 上游错误以 {"code":500,"errMsg":"..."} 数据行返回，必须显式透出，
+                    # 否则会被静默吞掉表现为空响应。
+                    if "choices" not in genai_json and genai_json.get("code") not in (None, 0, 200, "200"):
+                        err_msg = genai_json.get("errMsg") or genai_json.get("message") or genai_json
+                        yield {
+                            "type": "error",
+                            "error": f"GenAI upstream error {genai_json.get('code')}: {err_msg}",
+                        }
+                        return
 
-                        # 上游偶尔会返回补充元数据，先保留为内部 meta 事件。
-                        if genai_json.get("other"):
-                            yield {
-                                "type": "meta",
-                                "other": genai_json.get("other"),
-                            }
+                    # 补充元数据（字符串化 JSON，含 totalTokens）。
+                    if genai_json.get("other"):
+                        usage_total = _parse_total_tokens(genai_json["other"]) or usage_total
+                        yield {
+                            "type": "meta",
+                            "other": genai_json.get("other"),
+                        }
+                        continue
 
-                        # 只要上游给出 finish_reason，就视为本轮流式输出结束。
-                        if "choices" in genai_json and len(genai_json["choices"]) > 0:
-                            choice = genai_json["choices"][0]
-                            if choice.get("finish_reason") is not None:
-                                finished = True
+                    # 上游给出 finish_reason 即本轮内容结束；记下后继续读末尾元数据。
+                    choices = genai_json.get("choices")
+                    if choices and choices[0].get("finish_reason") is not None:
+                        saw_finish = True
+                        final_upstream_model = genai_json.get("model")
+                        continue
 
-                        if finished:
-                            yield {
-                                "type": "done",
-                                "upstream_model": genai_json.get("model"),
-                            }
-                            break
+                    if saw_finish:
+                        continue
 
-                        delta = extract_delta_from_genai(genai_json)
-                        reasoning = delta.get("reasoning")
-                        content = delta.get("content")
-                        # 内部统一拆成 reasoning 和 content，便于上层复用。
-                        if reasoning is not None or content is not None:
-                            yield {
-                                "type": "delta",
-                                "upstream_model": genai_json.get("model"),
-                                "reasoning": reasoning,
-                                "content": content,
-                            }
+                    delta = extract_delta_from_genai(genai_json)
+                    reasoning = delta.get("reasoning")
+                    content = delta.get("content")
+                    # 内部统一拆成 reasoning 和 content，便于上层复用。
+                    if reasoning is not None or content is not None:
+                        yield {
+                            "type": "delta",
+                            "upstream_model": genai_json.get("model"),
+                            "reasoning": reasoning,
+                            "content": content,
+                        }
 
-                except json.JSONDecodeError:
-                    pass
+            except json.JSONDecodeError:
+                pass
 
         yield {
             "type": "done",
-            "upstream_model": None,
+            "upstream_model": final_upstream_model,
+            "usage": usage_total,
         }
 
     except Exception as e:
@@ -205,7 +217,8 @@ def collect_genai_response(messages, model, max_tokens, settings: Settings, acce
         thinking (bool | None): 深度思考开关；None 跟随上游默认。
 
     Returns:
-        dict[str, str | None]: 聚合后的正文、思维链和上游模型名。
+        dict: 聚合后的正文、思维链、上游模型名和真实 token 数（`usage_total`，
+        上游未提供时为 None）。
 
     Raises:
         RuntimeError: 当上游事件流返回错误事件时抛出。
@@ -213,6 +226,7 @@ def collect_genai_response(messages, model, max_tokens, settings: Settings, acce
     content_parts = []
     reasoning_parts = []
     upstream_model = None
+    usage_total = None
 
     for event in stream_genai_events(messages, model, max_tokens, settings, access_token, image_payload,
                                      net_go, thinking):
@@ -225,10 +239,13 @@ def collect_genai_response(messages, model, max_tokens, settings: Settings, acce
             if event.get("content"):
                 content_parts.append(event["content"])
         if event["type"] == "done":
+            upstream_model = event.get("upstream_model") or upstream_model
+            usage_total = event.get("usage")
             break
 
     return {
         "content": "".join(content_parts),
         "reasoning_content": "".join(reasoning_parts),
         "upstream_model": upstream_model,
+        "usage_total": usage_total,
     }

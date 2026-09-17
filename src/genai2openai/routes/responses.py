@@ -226,7 +226,7 @@ def responses():
             ]
         })
 
-        return jsonify({
+        response_body = {
             "id": response_id,
             "object": "response",
             "created_at": int(datetime.now().timestamp()),
@@ -234,7 +234,15 @@ def responses():
             "model": model,
             "output": output,
             "output_text": collected["content"],
-        })
+        }
+        # 上游提供真实 totalTokens 时附带 usage。
+        if collected.get("usage_total") is not None:
+            response_body["usage"] = {
+                "input_tokens": 0,
+                "output_tokens": len(collected["content"]) + len(collected["reasoning_content"]),
+                "total_tokens": collected["usage_total"],
+            }
+        return jsonify(response_body)
 
     except Exception as e:
         logger.exception("responses failed")

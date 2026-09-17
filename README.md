@@ -23,11 +23,14 @@ GenAI 是一个基于 Flask 的聊天机器人接口服务，兼容 OpenAI 的�
 | 图片输入（Vision）                        | ✅              | ✅（GPT 模型） | 服务端自动上传图片并注入 `imageUrl/width/height`           |
 | 模型列表接口（`GET /v1/models`）          | ✅              | ✅             | 返回本项目映射后的可用模型列表                             |
 | 认证头兼容（Bearer/API Key）              | ✅              | ✅             | 支持 `Authorization`、`X-Access-Token`、`api-key` 等       |
+| 联网搜索 / 深度思考                        | 无原生字段      | ✅ 已映射      | 模型名后缀 `-search` / `-thinking` / `-nothink` 或请求体 `net_go` / `thinking` 字段 |
+| Token 用量（usage）                        | ✅              | ✅ 部分        | `total_tokens` 为上游真实值；`prompt`/`completion` 分项为估算 |
 
 ### Agent Tool 生态测试
 
 | 客户端 / Agent | 兼容性 |
 |---|---|
+| opencode | ✅ 实测通过（2026-09-17）：多轮工具循环正常。模型需配置 `tool_call: true`，见下文"接入 opencode" |
 | Chatbox | ✅ 完美支持 | 
 | Kilo Code | ❌ 不支持(模型限制) |
 
@@ -154,9 +157,37 @@ uv run tools/skills/context_length_tester/context_length_tester.py --model kimi-
 
 兼容性补充：
 
-- 解析优先级为 **JSON 优先**；
-- 同时兼容 XML 标签形式的工具调用块：`<tool_call>{"name":"...","arguments":{...}}</tool_call>`；
-- 当模型输出多个 `<tool_call>...</tool_call>` 块时，会按顺序解析为多个 `tool_calls`。
+- 三种格式全部识别并合并：提示词约定的 **JSON**、XML 标签块 `<tool_call>...</tool_call>`、以及 **Kimi 原生工具标记**（`call tool="..."` 特殊 token 序列，K3 会无视提示词直接输出它）；同一轮混用多种格式也不会丢调用，同名同参数的重复调用自动去重。
+- 实测提示：Kimi-K3 思考链长、且偶尔声称"没有工具可用"（幻觉，实际调用已成功），agent 场景更推荐 `deepseek-v4.1`。
+- 当模型输出多个调用时，会按顺序解析为多个 `tool_calls`。
+
+### 接入 opencode
+
+opencode 对自定义 provider 的模型默认不启用工具调用，需要在模型配置里显式声明 `tool_call: true`（配置位置：项目根目录 `opencode.json`，或全局 `~/.config/opencode/opencode.json`）：
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "genai": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "GenAI",
+      "options": {
+        "baseURL": "http://127.0.0.1:5000/v1",
+        "apiKey": "unused"
+      },
+      "models": {
+        "kimi-k3": { "name": "Kimi K3", "tool_call": true, "reasoning": true, "limit": { "context": 131072, "output": 16384 } },
+        "deepseek-v4.1": { "name": "DeepSeek V4.1", "tool_call": true, "limit": { "context": 131072, "output": 16384 } },
+        "deepseek-v4.1-search": { "name": "DeepSeek V4.1 (联网)", "tool_call": true, "limit": { "context": 131072, "output": 16384 } }
+      }
+    }
+  },
+  "model": "genai/deepseek-v4.1"
+}
+```
+
+注意：`baseURL` 必须是 `http://`（本服务不跑 TLS），末尾带 `/v1`；服务以 `--account`/`.env` 账号模式启动时 `apiKey` 可任意填。模型后缀 `-search` / `-thinking` / `-nothink` 可直接当独立模型配。
 
 ### 图片输入（仅 GPT 模型）
 

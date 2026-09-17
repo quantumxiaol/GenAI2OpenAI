@@ -31,8 +31,12 @@ logger = logging.getLogger("genai-proxy")
 chat_bp = Blueprint("chat", __name__)
 
 
-def build_chat_completion_payload(model, content, reasoning_content=None, tool_calls=None):
-    """构建非流式 Chat Completions 响应。"""
+def build_chat_completion_payload(model, content, reasoning_content=None, tool_calls=None, usage_total=None):
+    """构建非流式 Chat Completions 响应。
+
+    usage_total 为上游 other 元数据里的真实 totalTokens（含 prompt 与思维链）；
+    未提供时退化为字符数估算。
+    """
     message = {
         "role": "assistant",
         "content": None if tool_calls else content,
@@ -41,6 +45,13 @@ def build_chat_completion_payload(model, content, reasoning_content=None, tool_c
         message["tool_calls"] = tool_calls
     elif reasoning_content is not None:
         message["reasoning_content"] = reasoning_content
+
+    completion_estimate = len(content or "") + len(reasoning_content or "")
+    usage = {
+        "prompt_tokens": 0,
+        "completion_tokens": completion_estimate,
+        "total_tokens": usage_total if usage_total is not None else completion_estimate,
+    }
 
     return {
         "id": f"chatcmpl-{uuid.uuid4().hex[:24]}",
@@ -54,11 +65,7 @@ def build_chat_completion_payload(model, content, reasoning_content=None, tool_c
                 "finish_reason": "tool_calls" if tool_calls else "stop"
             }
         ],
-        "usage": {
-            "prompt_tokens": 0,
-            "completion_tokens": len(content or ""),
-            "total_tokens": len(content or "")
-        }
+        "usage": usage,
     }
 
 
@@ -80,6 +87,7 @@ def stream_chat_completions_response(messages, model, max_tokens, settings, acce
     """
     response_id = f"chatcmpl-{uuid.uuid4().hex[:24]}"
     created = int(datetime.now().timestamp())
+    completion_chars = 0
 
     for event in stream_genai_events(messages, model, max_tokens, settings, access_token, image_payload,
                                      net_go, thinking):
@@ -92,8 +100,10 @@ def stream_chat_completions_response(messages, model, max_tokens, settings, acce
             # 对外沿用 DeepSeek 常见字段名 reasoning_content。
             if event.get("reasoning") is not None:
                 delta_payload["reasoning_content"] = event["reasoning"]
+                completion_chars += len(event["reasoning"])
             if event.get("content") is not None:
                 delta_payload["content"] = event["content"]
+                completion_chars += len(event["content"])
 
             if delta_payload:
                 openai_response = {
@@ -125,6 +135,13 @@ def stream_chat_completions_response(messages, model, max_tokens, settings, acce
                     }
                 ]
             }
+            # 上游提供真实 totalTokens 时，在末块附带 usage（OpenAI include_usage 风格）。
+            if event.get("usage") is not None:
+                final_response["usage"] = {
+                    "prompt_tokens": 0,
+                    "completion_tokens": completion_chars,
+                    "total_tokens": event["usage"],
+                }
             yield f"data: {json.dumps(final_response)}\n\n"
             yield "data: [DONE]\n\n"
             return
@@ -281,6 +298,7 @@ def chat_completions():
             collected["content"],
             collected["reasoning_content"],
             tool_calls,
+            collected["usage_total"],
         )
         return jsonify(response)
 
