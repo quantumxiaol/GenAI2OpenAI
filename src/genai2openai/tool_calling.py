@@ -176,10 +176,14 @@ def extract_tool_calls_from_xml(content):
 # <|close|> call <|sepl> <|close|> tools <|sepl>
 # token 边界在渲染/复制中常带空格（如 `<|open| >`），先归一化再解析。
 def _normalize_kimi_markup(text):
-    """把 Kimi 特殊 token 的空格变体（`<|open| >` 等）归一化为标准形式。"""
-    text = re.sub(r"<\|open\|\s*>", "<|open|>", text)
-    text = re.sub(r"<\|close\|\s*>", "<|close|>", text)
-    text = re.sub(r"<\|sep\w*\s*>", "<|sepl>", text)
+    """把 Kimi 特殊 token 的变体归一化为标准形式。
+
+    实际观察到的变体包括：`<|open| >`（空格）、`<|sepl>` / `<|sepl|`>` / `<|sep|>`
+    （管道符数量与位置不一）等。
+    """
+    text = re.sub(r"<\|open\s*\|*\s*>", "<|open|>", text)
+    text = re.sub(r"<\|close\s*\|*\s*>", "<|close|>", text)
+    text = re.sub(r"<\|sep\w*\s*\|*\s*>", "<|sepl>", text)
     return text
 
 
