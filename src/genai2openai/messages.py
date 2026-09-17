@@ -85,9 +85,26 @@ def normalize_messages_for_genai(messages):
 
         tool_calls = message.get("tool_calls")
         if role == "assistant" and tool_calls and not content:
+            # 历史中的工具调用按提示词约定的 JSON 格式回放（不放自定义前缀）：
+            # 模型若在后续轮次模仿该格式，解析器能直接识别为真实调用，不会被当成普通文本。
+            compact_calls = []
+            for call in tool_calls:
+                if not isinstance(call, dict):
+                    continue
+                function = call.get("function") if isinstance(call.get("function"), dict) else {}
+                name = function.get("name")
+                if not name:
+                    continue
+                arguments = function.get("arguments", {})
+                if isinstance(arguments, str):
+                    try:
+                        arguments = json.loads(arguments)
+                    except json.JSONDecodeError:
+                        pass
+                compact_calls.append({"name": name, "arguments": arguments})
             normalized_messages.append({
                 "role": "assistant",
-                "content": "已请求调用工具：\n" + json.dumps(tool_calls, ensure_ascii=False),
+                "content": json.dumps({"tool_calls": compact_calls}, ensure_ascii=False),
             })
             continue
 

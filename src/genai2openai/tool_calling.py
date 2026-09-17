@@ -134,6 +134,40 @@ def extract_json_object(text):
     return None
 
 
+def extract_json_array(text):
+    """从文本中提取第一个完整 JSON 数组（结构与 extract_json_object 对称）。"""
+    start = text.find("[")
+    if start == -1:
+        return None
+
+    depth = 0
+    in_string = False
+    escape = False
+    for index in range(start, len(text)):
+        char = text[index]
+        if in_string:
+            if escape:
+                escape = False
+            elif char == "\\":
+                escape = True
+            elif char == '"':
+                in_string = False
+            continue
+
+        if char == '"':
+            in_string = True
+        elif char == "[":
+            depth += 1
+        elif char == "]":
+            depth -= 1
+            if depth == 0:
+                try:
+                    return json.loads(text[start:index + 1])
+                except json.JSONDecodeError:
+                    return None
+    return None
+
+
 def normalize_tool_call_arguments(arguments):
     """OpenAI 要求 function.arguments 是 JSON 字符串。"""
     if isinstance(arguments, str):
@@ -230,13 +264,16 @@ def extract_tool_calls_from_kimi(content):
 
 
 def _parse_json_tool_calls(parsed):
-    """从解析出的 JSON 对象构建 tool_calls（兼容 function 包装与扁平两种形态）。"""
-    if not isinstance(parsed, dict):
-        return []
-
-    raw_calls = parsed.get("tool_calls")
-    if raw_calls is None and parsed.get("name"):
-        raw_calls = [parsed]
+    """从解析出的 JSON 构建 tool_calls（兼容 function 包装、扁平、顶层数组形态）。"""
+    raw_calls = None
+    if isinstance(parsed, dict):
+        raw_calls = parsed.get("tool_calls")
+        # 扁平形态（模型省略 tool_calls 包装直接给单个调用）需要 name+arguments 同时在场，
+        # 防止把回答正文里恰好含 "name" 字段的 JSON 片段误判为工具调用。
+        if raw_calls is None and parsed.get("name") and "arguments" in parsed:
+            raw_calls = [parsed]
+    elif isinstance(parsed, list):
+        raw_calls = parsed
     if not isinstance(raw_calls, list):
         return []
 
@@ -269,6 +306,9 @@ def parse_tool_calls_from_content(content):
     JSON（提示词约定）、<tool_call> XML、Kimi 原生标记三种格式都会尝试并合并：
     Kimi-K3 等模型可能在同一轮里混用多种格式（例如先用原生标记写文件、再用 JSON
     调命令），谁先匹配用谁会丢另一半。同名同参数的重复调用会被去重。
+
+    另兼容遗留格式：旧版本把历史中的 assistant 工具调用归一化为
+    「已请求调用工具：[...]」文本，模型会原样模仿该格式作答。
     """
     if not content:
         return []
@@ -281,6 +321,11 @@ def parse_tool_calls_from_content(content):
         tool_calls.extend(extract_tool_calls_from_xml(content))
     if "call tool=" in content:
         tool_calls.extend(extract_tool_calls_from_kimi(content))
+    if not tool_calls and "已请求调用工具" in content:
+        # 遗留格式中的 JSON 数组本身就是合法的调用列表。
+        parsed_array = extract_json_array(content)
+        if isinstance(parsed_array, list):
+            tool_calls.extend(_parse_json_tool_calls(parsed_array))
 
     unique_calls = []
     seen = set()
