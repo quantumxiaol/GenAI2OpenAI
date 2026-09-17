@@ -59,6 +59,7 @@ def build_tool_calling_messages(messages, tools, tool_choice):
     normalized_choice = normalize_tool_choice(tool_choice)
     tool_prompt = [
         "你可以调用调用方提供的工具，但上游 API 没有原生 tool calling 能力。",
+        "这些工具是真实可用的：你的调用会被解析并真正执行，执行结果会随后返回给你；不要声称没有工具可用。",
         "当你决定调用工具时，优先输出一个 JSON 对象，不要输出 Markdown、解释或额外文本。",
         "JSON 格式必须为：{\"tool_calls\":[{\"name\":\"工具名\",\"arguments\":{}}]}。",
         "兼容格式：也允许输出 <tool_call>{\"name\":\"工具名\",\"arguments\":{}}</tool_call>；若并行调用可连续输出多个 <tool_call>...</tool_call>。",
@@ -228,29 +229,15 @@ def extract_tool_calls_from_kimi(content):
     return tool_calls
 
 
-def parse_tool_calls_from_content(content):
-    """解析提示词约定的工具调用 JSON，并转换为 OpenAI tool_calls 结构。"""
-    if not content:
+def _parse_json_tool_calls(parsed):
+    """从解析出的 JSON 对象构建 tool_calls（兼容 function 包装与扁平两种形态）。"""
+    if not isinstance(parsed, dict):
         return []
 
-    # 优先 JSON：兼容当前主路径。
-    parsed = extract_json_object(content)
-    raw_calls = None
-    if isinstance(parsed, dict):
-        raw_calls = parsed.get("tool_calls")
-        if raw_calls is None and parsed.get("name"):
-            raw_calls = [parsed]
-    elif "<tool_call>" in content:
-        # JSON 解析失败时回退 XML。
-        return extract_tool_calls_from_xml(content)
-
+    raw_calls = parsed.get("tool_calls")
+    if raw_calls is None and parsed.get("name"):
+        raw_calls = [parsed]
     if not isinstance(raw_calls, list):
-        if "<tool_call>" in content:
-            return extract_tool_calls_from_xml(content)
-        # 再回退 Kimi 原生格式（K3 等模型会无视提示词输出内置格式）。
-        kimi_calls = extract_tool_calls_from_kimi(content)
-        if kimi_calls:
-            return kimi_calls
         return []
 
     tool_calls = []
@@ -274,3 +261,33 @@ def parse_tool_calls_from_content(content):
         })
 
     return tool_calls
+
+
+def parse_tool_calls_from_content(content):
+    """从模型输出中解析工具调用并转换为 OpenAI tool_calls 结构。
+
+    JSON（提示词约定）、<tool_call> XML、Kimi 原生标记三种格式都会尝试并合并：
+    Kimi-K3 等模型可能在同一轮里混用多种格式（例如先用原生标记写文件、再用 JSON
+    调命令），谁先匹配用谁会丢另一半。同名同参数的重复调用会被去重。
+    """
+    if not content:
+        return []
+
+    tool_calls = []
+    parsed = extract_json_object(content)
+    if isinstance(parsed, dict):
+        tool_calls.extend(_parse_json_tool_calls(parsed))
+    if "<tool_call>" in content:
+        tool_calls.extend(extract_tool_calls_from_xml(content))
+    if "call tool=" in content:
+        tool_calls.extend(extract_tool_calls_from_kimi(content))
+
+    unique_calls = []
+    seen = set()
+    for call in tool_calls:
+        key = (call["function"]["name"], call["function"]["arguments"])
+        if key in seen:
+            continue
+        seen.add(key)
+        unique_calls.append(call)
+    return unique_calls
