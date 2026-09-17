@@ -57,11 +57,22 @@ def main():
             "max_tokens": 128,
         })
         message = resp.json()["choices"][0]["message"]
-        reasoning_empty = not message.get("reasoning_content")
-        content_ok = bool(message.get("content"))
-        return reasoning_empty and content_ok, f"reasoning_empty={reasoning_empty} content={str(message.get('content'))[:60]!r}"
+        # 上游对 Kimi-K3 忽略 thinking:false（该模型始终输出思维链），此项仅验证请求正常。
+        return bool(message.get("content")), f"reasoning_present={bool(message.get('reasoning_content'))} content={str(message.get('content'))[:60]!r}"
 
-    results.append(check("kimi-k3 -nothink (思维链应关闭)", t_nothink))
+    results.append(check("kimi-k3 -nothink (K3 思考不可关，仅验证可用)", t_nothink))
+
+    def t_thinking_on():
+        resp = post_chat(base_url, {
+            "model": "deepseek-v4.1-thinking",
+            "messages": [{"role": "user", "content": "9.11 和 9.9 哪个大？只回答结论"}],
+            "max_tokens": 2048,
+        })
+        message = resp.json()["choices"][0]["message"]
+        reasoning = message.get("reasoning_content") or ""
+        return bool(reasoning) and bool(message.get("content")), f"reasoning={reasoning[:60]!r}"
+
+    results.append(check("deepseek-v4.1 -thinking (思维链应开启)", t_thinking_on))
 
     def t_thinking_default():
         resp = post_chat(base_url, {

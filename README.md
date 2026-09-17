@@ -213,7 +213,7 @@ curl http://127.0.0.1:5000/v1/chat/completions \
 | 深度思考关 | `kimi-k3-nothink` | `"thinking": false` |
 
 - 后缀可组合，如 `kimi-k3-search-thinking`；适用于全部模型，大小写不敏感。
-- 不指定时跟随上游默认（如 Kimi-K3 默认输出思维链，可用 `-nothink` 关闭提速）。
+- 不指定时跟随上游默认。注意 `thinking` 开关的实际效果取决于模型：DeepSeek-V4.1 等可用 `-thinking` 开启思维链；Kimi-K3 是强制思考模型，上游会忽略 `thinking: false`（`-nothink` 对它无效）。
 - 联网检索结果直接融入回答文本（含引用标记），无额外返回字段。
 
 ### 会话记录
