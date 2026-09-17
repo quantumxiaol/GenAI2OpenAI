@@ -6,7 +6,7 @@ from rich.console import Console
 from rich.logging import RichHandler
 
 from .auth import auto_login_with_account, load_cached_token, validate_cached_token
-from .config import DEFAULT_UPLOAD_TOKEN, Settings, load_dotenv
+from .config import DEFAULT_PORT, DEFAULT_UPLOAD_TOKEN, Settings, load_dotenv
 from .registry import log_new_remote_models
 from .routes import create_app
 
@@ -19,8 +19,8 @@ def parse_args():
                         help='ShanghaiTech account in the format student_id@password, used to auto-login and get token (也可在 .env 中配置 GENAI_ACCOUNT)')
     parser.add_argument('--upload-token', type=str, default=None,
                         help='GenAI image upload API token header value (也可在 .env 中配置 GENAI_UPLOAD_TOKEN)')
-    parser.add_argument('--port', type=int, default=5000,
-                        help='Flask server port (default: 5000)')
+    parser.add_argument('--port', type=int, default=None,
+                        help=f'Flask server port (default: {DEFAULT_PORT}；也可在 .env 中配置 GENAI_PORT)')
     parser.add_argument('--log-level', type=str, default='INFO',
                         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
                         help='Console log level (default: INFO)')
@@ -43,6 +43,19 @@ def setup_logging(log_level):
     )
 
 
+def resolve_port(cli_port):
+    """端口优先级：--port 命令行 > GENAI_PORT 环境变量 > 默认值。"""
+    if cli_port is not None:
+        return cli_port
+    env_port = os.environ.get("GENAI_PORT")
+    if env_port:
+        try:
+            return int(env_port)
+        except ValueError:
+            raise SystemExit(f"GENAI_PORT must be an integer, got {env_port!r}")
+    return DEFAULT_PORT
+
+
 def main():
     load_dotenv()
     args = parse_args()
@@ -50,7 +63,7 @@ def main():
         token=args.token or os.environ.get("GENAI_TOKEN"),
         account=args.account or os.environ.get("GENAI_ACCOUNT"),
         upload_token=args.upload_token or os.environ.get("GENAI_UPLOAD_TOKEN") or DEFAULT_UPLOAD_TOKEN,
-        port=args.port,
+        port=resolve_port(args.port),
         log_level=args.log_level,
         chat_group_id=args.chat_group_id or os.environ.get("GENAI_CHAT_GROUP_ID"),
     )

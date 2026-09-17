@@ -67,13 +67,13 @@ GenAI 是一个基于 Flask 的聊天机器人接口服务，兼容 OpenAI 的�
 
 ```bash
 # 1. 拿代码、装环境（需要 Python 3.11+ 和 uv）
-git clone <你的 fork 地址> && cd GenAI2OpenAI
+git clone https://github.com/quantumxiaol/GenAI2OpenAI && cd GenAI2OpenAI
 uv sync
 
 # 2. 配置凭据（学号@密码，用于自动登录；也可浏览器抓 token，见下文 Token 获取）
 cp .env.example .env   # 然后编辑 .env 填入 GENAI_ACCOUNT=学号@密码
 
-# 3. 启动（默认端口 5000；建议带会话归组，避免网页版会话列表被 API 请求刷屏）
+# 3. 启动（默认端口 11435；建议带会话归组，避免网页版会话列表被 API 请求刷屏）
 uv run genai2openai --chat-group-id ApiProxy
 
 # 4. 冒烟验证（8 项全 PASS 即一切正常）
@@ -83,7 +83,7 @@ uv run python tools/smoke_test.py
 客户端接入：
 
 - **opencode**：见下文[接入 opencode](#接入-opencode)，有覆盖全部模型的完整配置
-- **任意 OpenAI 客户端**：`base_url = http://127.0.0.1:5000/v1`，模型如 `deepseek-v4.1`、`kimi-k3-search`
+- **任意 OpenAI 客户端**：`base_url = http://127.0.0.1:11435/v1`，模型如 `deepseek-v4.1`、`kimi-k3-search`
 
 平台再次升级导致失效时，先跑 `uv run tools/probe_upstream.py` 看上游原始报文，再对照 `docs/模型列表.md` 里的协议说明排查。
 
@@ -97,10 +97,10 @@ uv run python tools/smoke_test.py
 ### 启动服务
 
 ```bash
-uv run genai2openai [--token <token>] [--account <student_id@password>] [--upload-token <upload_token>] [--log-level INFO] [--port 5000]
+uv run genai2openai [--token <token>] [--account <student_id@password>] [--upload-token <upload_token>] [--log-level INFO] [--port 11435]
 ```
 
-端口默认 5000。服务将在本地 `0.0.0.0:5000` 端口启动。`uv run main.py` 与 `uv run python -m genai2openai` 是等价的兼容入口。
+端口默认 11435（Ollama 端口后一位，避开 macOS AirPlay 对 5000 的占用）。服务将在本地 `0.0.0.0:11435` 端口启动。`uv run main.py` 与 `uv run python -m genai2openai` 是等价的兼容入口。
 
 ### 项目结构
 
@@ -125,13 +125,17 @@ tools/                  # 客户端工具（benchmark、上下文长度测试）
 - `--account`：上海科技大学统一身份认证账号，格式为 `学号@密码`。当未提供 `--token` 时，服务启动时会自动登录并获取 GenAI token。
 - `--upload-token`：图片上传接口 `token` 请求头值（默认内置项目当前可用值）。
 - `--log-level`：控制台日志级别，支持 `DEBUG / INFO / WARNING / ERROR / CRITICAL`，默认 `INFO`。
+- `--port`：监听端口，默认 `11435`。
+- `--chat-group-id`：固定上游会话分组 ID，所有 API 请求归入网页版同一条会话（默认不发送，每次请求各自建会话）。
 
-三个认证相关参数也可以写进项目根目录的 `.env` 文件（已 gitignore，参考 `.env.example`），避免密码出现在命令行和进程列表中：
+以上参数都可以写进项目根目录的 `.env` 文件（已 gitignore，参考 `.env.example`），避免密码出现在命令行和进程列表中：
 
 ```bash
 GENAI_ACCOUNT=学号@密码
 GENAI_TOKEN=eyJ...
 GENAI_UPLOAD_TOKEN=
+GENAI_PORT=11435
+GENAI_CHAT_GROUP_ID=ApiProxy
 ```
 
 命令行参数优先于 `.env`。
@@ -228,7 +232,7 @@ opencode 对自定义 provider 的模型默认不启用工具调用，需要在�
       "npm": "@ai-sdk/openai-compatible",
       "name": "GenAI",
       "options": {
-        "baseURL": "http://127.0.0.1:5000/v1",
+        "baseURL": "http://127.0.0.1:11435/v1",
         "apiKey": "unused"
       },
       "models": {
@@ -282,7 +286,7 @@ opencode 对自定义 provider 的模型默认不启用工具调用，需要在�
 示例：
 
 ```bash
-curl http://127.0.0.1:5000/v1/chat/completions \
+curl http://127.0.0.1:11435/v1/chat/completions \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -346,7 +350,7 @@ uv run genai2openai-login --credential '学号@密码'
 示例：
 
 ```bash
-curl http://127.0.0.1:5000/v1/chat/completions \
+curl http://127.0.0.1:11435/v1/chat/completions \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"model":"kimi-k3","messages":[{"role":"user","content":"你好"}]}'

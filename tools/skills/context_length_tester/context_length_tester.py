@@ -17,11 +17,11 @@ Context Length Tester Skill
     uv run context_length_tester.py --model deepseek-v3 --mode needle --start 100000 --step 20000
     
     # 指定自定义 API 地址
-    uv run context_length_tester.py --model deepseek-v3 --mode needle --api-url http://localhost:6001/v1/chat/completions
+    uv run context_length_tester.py --model deepseek-v3 --mode needle --api-url http://localhost:11435/v1/chat/completions
 
 环境变量：
     OPENAI_API_KEY - API 密钥（默认: sk-test）
-    OPENAI_API_BASE - API 基础地址（默认: http://localhost:6001/v1）
+    OPENAI_API_BASE - API 基础地址（默认: http://localhost:11435/v1）
 """
 
 import argparse
@@ -329,7 +329,7 @@ class ContextLengthTester:
 def main():
     parser = argparse.ArgumentParser(description="测试 LLM 模型上下文长度")
     parser.add_argument("--api-url", type=str, 
-                        default=os.getenv("OPENAI_API_BASE", "http://localhost:6001/v1/chat/completions"),
+                        default=os.getenv("OPENAI_API_BASE", "http://localhost:11435/v1/chat/completions"),
                         help="API 端点地址")
     parser.add_argument("--api-key", type=str,
                         default=os.getenv("OPENAI_API_KEY", "sk-test"),

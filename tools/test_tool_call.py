@@ -29,7 +29,7 @@ TOOL = {
 def main():
     parser = argparse.ArgumentParser(description="Test tool-calling compatibility through the proxy")
     parser.add_argument("--model", default="deepseek-v4.1")
-    parser.add_argument("--base-url", default="http://127.0.0.1:5000")
+    parser.add_argument("--base-url", default="http://127.0.0.1:11435")
     args = parser.parse_args()
 
     payload = {

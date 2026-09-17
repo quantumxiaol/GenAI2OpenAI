@@ -2,8 +2,8 @@
 """冒烟测试：验证代理核心链路（需要校内网络 + 服务已启动）。
 
 用法：
-    uv run tools/smoke_test.py                          # 默认打 http://127.0.0.1:5000
-    uv run tools/smoke_test.py --base-url http://127.0.0.1:5000
+    uv run tools/smoke_test.py                          # 默认打 http://127.0.0.1:11435
+    uv run tools/smoke_test.py --base-url http://127.0.0.1:11435
 """
 
 import argparse
@@ -31,7 +31,7 @@ def post_chat(base_url, body):
 
 def main():
     parser = argparse.ArgumentParser(description="GenAI2OpenAI smoke test")
-    parser.add_argument("--base-url", default="http://127.0.0.1:5000", help="proxy base URL (without /v1)")
+    parser.add_argument("--base-url", default="http://127.0.0.1:11435", help="proxy base URL (without /v1)")
     args = parser.parse_args()
     base_url = args.base_url.rstrip("/")
 

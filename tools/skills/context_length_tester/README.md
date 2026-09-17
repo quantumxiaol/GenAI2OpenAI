@@ -30,7 +30,7 @@ uv run tools/skills/context_length_tester/context_length_tester.py --model deeps
 |------|--------|------|
 | `--model` | 必填 | 模型名称，如 deepseek-v3, gpt-4.1 |
 | `--mode` | needle | 测试模式: probe 或 needle |
-| `--api-url` | http://localhost:6001/v1/chat/completions | API 端点 |
+| `--api-url` | http://localhost:11435/v1/chat/completions | API 端点 |
 | `--api-key` | sk-test | API 密钥 |
 | `--start` | 100000 | needle 模式起始 token 数 |
 | `--max` | 200000 | 最大测试 token 数 |
@@ -41,7 +41,7 @@ uv run tools/skills/context_length_tester/context_length_tester.py --model deeps
 
 ```bash
 export OPENAI_API_KEY="sk-test"
-export OPENAI_API_BASE="http://localhost:6001/v1"
+export OPENAI_API_BASE="http://localhost:11435/v1"
 ```
 
 ## 测试模式详解
@@ -128,7 +128,7 @@ uv run context_length_tester.py --model deepseek-v3 --mode needle
 from context_length_tester import ContextLengthTester
 
 tester = ContextLengthTester(
-    api_url="http://localhost:6001/v1/chat/completions",
+    api_url="http://localhost:11435/v1/chat/completions",
     api_key="sk-test",
     model="deepseek-v3"
 )
