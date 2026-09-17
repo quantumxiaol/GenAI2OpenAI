@@ -170,6 +170,59 @@ def extract_tool_calls_from_xml(content):
     return tool_calls
 
 
+# Kimi 原生工具调用格式（模型训练内置，会在要求 JSON 时仍然输出）：
+# <|open|> tools <|sepl> <|open|> call tool="bash" index="1" <|sepl>
+#   <|open|> argument key="command" type="string" <|sepl> ls <|close|> argument <|sepl>
+# <|close|> call <|sepl> <|close|> tools <|sepl>
+# token 边界在渲染/复制中常带空格（如 `<|open| >`），先归一化再解析。
+def _normalize_kimi_markup(text):
+    """把 Kimi 特殊 token 的空格变体（`<|open| >` 等）归一化为标准形式。"""
+    text = re.sub(r"<\|open\|\s*>", "<|open|>", text)
+    text = re.sub(r"<\|close\|\s*>", "<|close|>", text)
+    text = re.sub(r"<\|sep\w*\s*>", "<|sepl>", text)
+    return text
+
+
+KIMI_CALL_RE = re.compile(
+    r'<\|open\|>\s*call\s+tool="(?P<name>[^"]+)"[^<]*?<\|sepl>(?P<body>.*?)<\|close\|>\s*call\s*<\|sepl>',
+    flags=re.DOTALL,
+)
+KIMI_ARG_RE = re.compile(
+    r'<\|open\|>\s*argument\s+key="(?P<key>[^"]+)"(?:\s+type="[^"]+")?\s*<\|sepl>(?P<value>.*?)<\|close\|>\s*argument\s*<\|sepl>',
+    flags=re.DOTALL,
+)
+
+
+def extract_tool_calls_from_kimi(content):
+    """解析 Kimi 原生工具调用格式，转换为 OpenAI tool_calls 结构。"""
+    if not content or "call tool=" not in content:
+        return []
+
+    normalized = _normalize_kimi_markup(content)
+    tool_calls = []
+    for call_match in KIMI_CALL_RE.finditer(normalized):
+        name = call_match.group("name")
+        body = call_match.group("body")
+        arguments = {}
+        for arg_match in KIMI_ARG_RE.finditer(body):
+            raw_value = arg_match.group("value").strip()
+            try:
+                arguments[arg_match.group("key")] = json.loads(raw_value)
+            except (json.JSONDecodeError, ValueError):
+                arguments[arg_match.group("key")] = raw_value
+
+        tool_calls.append({
+            "id": f"call_{uuid.uuid4().hex[:24]}",
+            "type": "function",
+            "function": {
+                "name": name,
+                "arguments": json.dumps(arguments, ensure_ascii=False),
+            },
+        })
+
+    return tool_calls
+
+
 def parse_tool_calls_from_content(content):
     """解析提示词约定的工具调用 JSON，并转换为 OpenAI tool_calls 结构。"""
     if not content:
@@ -189,6 +242,10 @@ def parse_tool_calls_from_content(content):
     if not isinstance(raw_calls, list):
         if "<tool_call>" in content:
             return extract_tool_calls_from_xml(content)
+        # 再回退 Kimi 原生格式（K3 等模型会无视提示词输出内置格式）。
+        kimi_calls = extract_tool_calls_from_kimi(content)
+        if kimi_calls:
+            return kimi_calls
         return []
 
     tool_calls = []
