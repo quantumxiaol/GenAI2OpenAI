@@ -1,6 +1,15 @@
 import os
 from dataclasses import dataclass
 
+# 使用系统信任库做 TLS 校验（替代 certifi）：
+# 1) 上游服务器证书链不完整（只发叶子证书），certifi 只有根证书、不会补中间链；
+# 2) 本机跑 Clash 类代理时，其 MITM 根证书在系统钥匙串中但不在 certifi 中。
+# 系统库（macOS 钥匙串等）对这两种情况都能正确处理，与浏览器和 curl 行为一致。
+# 需在任何上游请求发生前注入；config 模块会被所有上游调用方导入。
+import truststore
+
+truststore.inject_into_ssl()
+
 GENAI_BASE_URL = "https://genai.shanghaitech.edu.cn"
 IDS_BASE_URL = "https://ids.shanghaitech.edu.cn"
 GENAI_URL = f"{GENAI_BASE_URL}/htk/chat/start/chat"
