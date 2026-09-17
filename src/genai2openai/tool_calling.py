@@ -233,7 +233,7 @@ KIMI_CALL_RE = re.compile(
     flags=re.DOTALL,
 )
 KIMI_ARG_RE = re.compile(
-    r'<\|open\|>\s*argument\s+key="(?P<key>[^"]+)"(?:\s+type="[^"]+")?\s*<\|sepl>(?P<value>.*?)<\|close\|>\s*argument\s*<\|sepl>',
+    r'<\|open\|>\s*argument\s*key\s*=\s*"(?P<key>[^"]+)"(?:\s+type="[^"]+")?\s*<\|sepl>(?P<value>.*?)<\|close\|>\s*argument\s*<\|sepl>',
     flags=re.DOTALL,
 )
 
