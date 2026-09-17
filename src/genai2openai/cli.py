@@ -80,7 +80,14 @@ def main():
                 logging.getLogger("genai-proxy").info("Cached token is invalid or expired")
 
     if not settings.token and settings.account:
-        settings.token = auto_login_with_account(settings.account)
+        # 上游不可用（平台维护/网络隔离）时也照常启动：请求级 token 仍可用，
+        # 平台恢复后再重启即可获得启动 token。
+        try:
+            settings.token = auto_login_with_account(settings.account)
+        except SystemExit as exc:
+            logging.getLogger("genai-proxy").warning(
+                "Auto login failed (%s); starting without a startup token", exc
+            )
 
     app = create_app(settings)
     log_new_remote_models(settings)
