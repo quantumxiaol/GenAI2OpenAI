@@ -1,6 +1,35 @@
 # GenAI2OpenAI
 
+把上海科技大学 GenAI 对话平台（Web Chat）反向代理成 OpenAI 兼容 API 的服务，可在 opencode / Chatbox 等任意 OpenAI 客户端中使用。
+
+## 项目渊源
+
+本项目 fork 自 [ShanghaitechGeekPie/GenAI2OpenAI](https://github.com/ShanghaitechGeekPie/GenAI2OpenAI)（作者邮箱见文末）。**仅供本校师生个人学习使用**，请勿将服务暴露给他人。
+
+### 原作者贡献
+
+核心架构与协议逆向均由原作者完成：
+
+- Flask 反向代理骨架：OpenAI 兼容的 `/v1/chat/completions`、`/v1/responses`、`/v1/models` 端点
+- GenAI 上游 SSE 协议适配与模型别名映射机制
+- 统一身份认证（CAS）自动登录（IDS 页面提取 salt、AES 密码加密、重定向链拿 token）
+- 图片上传链路、工具调用的提示词兼容层雏形
+- benchmark 与上下文长度测试工具
+
+### 本分支改进（2026-09 新版平台适配）
+
+原仓库更新止于 2026-05，平台 9 月升级后旧模型全部下线、协议字段变更。本分支完成适配与增强：
+
+- **协议适配**：思维链字段更名兼容（`reasoning_content`）；上游错误包（`{"code":500,"errMsg":...}`）显式透出，不再静默吞掉；`data: [DONE]` 处理；修正 `chatInfo`（本轮提问）与 `messages`（历史）的拆分——旧版会把最后一条用户消息发两遍
+- **模型表更新**：kimi-k3 / deepseek-v4.1 / glm-5.3-flash / qwen-3.8 / gpt-6-astra / gpt-5.6-sol/terra/luna 全量实测（benchmark 8/8 通过），详见[模型列表](docs/模型列表.md)
+- **新能力**：联网搜索（`-search`）与深度思考（`-thinking` / `-nothink`）开关映射；`--chat-group-id` 会话归组，避免 API 请求刷爆网页版会话列表
+- **工具调用增强**：Kimi 原生工具标记（`call tool=...` 特殊 token）解析，JSON / XML / 原生三种格式合并去重；opencode 多轮工具循环实测通过
+- **工程化**：标准 src 布局重构（单文件 1551 行 → `src/genai2openai/` 模块包）；`Settings` 配置对象；`.env` 凭据文件支持；日志文件双写；真实 token usage（接入上游 `totalTokens`）
+- **调试工具链**：`tools/probe_upstream.py`（上游原始报文探测，平台再升级时先跑它）、`tools/smoke_test.py`（冒烟回归）、`tools/test_tool_call.py`（工具调用单测）
+
 ## 写在前面
+
+> 本节为原作者 README 原文，保留作纪念。
 
 写这个项目的时候, GenAI平台还是比较好的, 当时我也没申请API. 虽然GenAI平台实际上烂完了,但胜在免费,自己用用还是可以的. 后来申请了API, 只能说难兄难弟,没比公开的好用多少. 现在我已经不缺token了,所以维护这个repo的动力很低很低. 我建议大家玩一玩genai就够了, 最多是一些高通量的任务用一下, 除此之外别折腾了. 嫌贵可以去买那些中转服务, 一个平台可以用所有模型的那种,其实是挺好用的. 最近我看到大家对于这个项目还是挺热情的,所以参考其他人的工作补全了很多很多的功能. 当然距离一个“能用”的API还有距离, 当然这个距离我也无能为力了. 一想当GenAI刚出的时候我还是非常有信心的, Yu老师亲口说这个平台很吊, 但是我只能说烂完了(除了免费). 希望大家能利用AI改善自己的生活. 最后如果不出意外这个项目基本不会再更新了,如果有本科生小朋友愿意接手的话可以联系我(issue里直接提也可以). ciallo (∠·ω )⌒★
 
@@ -33,6 +62,30 @@ GenAI 是一个基于 Flask 的聊天机器人接口服务，兼容 OpenAI 的�
 | opencode | ✅ 实测通过（2026-09-17）：多轮工具循环正常。模型需配置 `tool_call: true`，见下文"接入 opencode" |
 | Chatbox | ✅ 完美支持 | 
 | Kilo Code | ❌ 不支持(模型限制) |
+
+## 快速开始
+
+```bash
+# 1. 拿代码、装环境（需要 Python 3.11+ 和 uv）
+git clone <你的 fork 地址> && cd GenAI2OpenAI
+uv sync
+
+# 2. 配置凭据（学号@密码，用于自动登录；也可浏览器抓 token，见下文 Token 获取）
+cp .env.example .env   # 然后编辑 .env 填入 GENAI_ACCOUNT=学号@密码
+
+# 3. 启动（默认端口 5000；建议带会话归组，避免网页版会话列表被 API 请求刷屏）
+uv run genai2openai --chat-group-id ApiProxy
+
+# 4. 冒烟验证（8 项全 PASS 即一切正常）
+uv run python tools/smoke_test.py
+```
+
+客户端接入：
+
+- **opencode**：见下文[接入 opencode](#接入-opencode)，有覆盖全部模型的完整配置
+- **任意 OpenAI 客户端**：`base_url = http://127.0.0.1:5000/v1`，模型如 `deepseek-v4.1`、`kimi-k3-search`
+
+平台再次升级导致失效时，先跑 `uv run tools/probe_upstream.py` 看上游原始报文，再对照 `docs/模型列表.md` 里的协议说明排查。
 
 ## 安装与运行
 
@@ -163,7 +216,9 @@ uv run tools/skills/context_length_tester/context_length_tester.py --model kimi-
 
 ### 接入 opencode
 
-opencode 对自定义 provider 的模型默认不启用工具调用，需要在模型配置里显式声明 `tool_call: true`（配置位置：项目根目录 `opencode.json`，或全局 `~/.config/opencode/opencode.json`）：
+opencode 对自定义 provider 的模型默认不启用工具调用，需要在模型配置里显式声明 `tool_call: true`（配置位置：项目根目录 `opencode.json`，或全局 `~/.config/opencode/opencode.json`）。
+
+接入当前全部 8 个模型（含联网/深思变体）的完整配置：
 
 ```json
 {
@@ -177,9 +232,19 @@ opencode 对自定义 provider 的模型默认不启用工具调用，需要在�
         "apiKey": "unused"
       },
       "models": {
-        "kimi-k3": { "name": "Kimi K3", "tool_call": true, "reasoning": true, "limit": { "context": 131072, "output": 16384 } },
-        "deepseek-v4.1": { "name": "DeepSeek V4.1", "tool_call": true, "limit": { "context": 131072, "output": 16384 } },
-        "deepseek-v4.1-search": { "name": "DeepSeek V4.1 (联网)", "tool_call": true, "limit": { "context": 131072, "output": 16384 } }
+        "kimi-k3":                { "name": "Kimi K3",             "tool_call": true, "reasoning": true, "limit": { "context": 131072, "output": 16384 } },
+        "kimi-k3-search":         { "name": "Kimi K3 (联网)",      "tool_call": true, "reasoning": true, "limit": { "context": 131072, "output": 16384 } },
+        "deepseek-v4.1":          { "name": "DeepSeek V4.1",       "tool_call": true, "limit": { "context": 131072, "output": 16384 } },
+        "deepseek-v4.1-search":   { "name": "DeepSeek V4.1 (联网)","tool_call": true, "limit": { "context": 131072, "output": 16384 } },
+        "deepseek-v4.1-thinking": { "name": "DeepSeek V4.1 (深思)","tool_call": true, "reasoning": true, "limit": { "context": 131072, "output": 16384 } },
+        "glm-5.3-flash":          { "name": "GLM 5.3 Flash",       "tool_call": true, "limit": { "context": 131072, "output": 16384 } },
+        "glm-5.3-flash-search":   { "name": "GLM 5.3 Flash (联网)","tool_call": true, "limit": { "context": 131072, "output": 16384 } },
+        "qwen-3.8":               { "name": "Qwen 3.8",            "tool_call": true, "limit": { "context": 131072, "output": 16384 } },
+        "qwen-3.8-search":        { "name": "Qwen 3.8 (联网)",     "tool_call": true, "limit": { "context": 131072, "output": 16384 } },
+        "gpt-6-astra":            { "name": "GPT-6 Astra",         "tool_call": true, "limit": { "context": 262144, "output": 16384 } },
+        "gpt-5.6-sol":            { "name": "GPT-5.6 Sol",         "tool_call": true, "limit": { "context": 262144, "output": 16384 } },
+        "gpt-5.6-terra":          { "name": "GPT-5.6 Terra",       "tool_call": true, "limit": { "context": 262144, "output": 16384 } },
+        "gpt-5.6-luna":           { "name": "GPT-5.6 Luna",        "tool_call": true, "limit": { "context": 262144, "output": 16384 } }
       }
     }
   },
@@ -187,7 +252,13 @@ opencode 对自定义 provider 的模型默认不启用工具调用，需要在�
 }
 ```
 
-注意：`baseURL` 必须是 `http://`（本服务不跑 TLS），末尾带 `/v1`；服务以 `--account`/`.env` 账号模式启动时 `apiKey` 可任意填。模型后缀 `-search` / `-thinking` / `-nothink` 可直接当独立模型配。
+注意：
+
+- `baseURL` 必须是 `http://`（本服务不跑 TLS），末尾带 `/v1`。
+- 服务以 `--account` / `.env` 账号模式启动时 `apiKey` 可任意填。
+- 模型后缀 `-search` / `-thinking` / `-nothink` 直接当独立模型配；`reasoning: true` 让 opencode 把思维链渲染成思考块。
+- `limit.context` 是估算值（自定义模型没有元数据），实测后可用 `tools/skills/context_length_tester` 校准。
+- 模型选择建议：agent 任务主力 `deepseek-v4.1`（快、不话痨）；重推理用 `kimi-k3`（强制思考，慢但深）；GPT 系有 100 万 tokens/月额度，留给本地模型解决不了的硬任务。
 
 ### 图片输入（仅 GPT 模型）
 
@@ -253,7 +324,7 @@ curl http://127.0.0.1:5000/v1/chat/completions \
 
 ## Token 获取
 
-1. 首先前往[GenAI 对话平台](https://genai.shanghaitech.edu.cn/dialogue)
+1. 首先前往[GenAI 对话平台](https://genai.shanghaitech.edu.cn/dashboard/analysis)
 2. 打开浏览器开发者工具，随便发送一条消息，捕获名为`chat`的请求
 3. 复制请求标头中的`x-access-token`字段，即为`<token>`
 
@@ -278,7 +349,7 @@ uv run genai2openai-login --credential '学号@密码'
 curl http://127.0.0.1:5000/v1/chat/completions \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
-  -d '{"model":"deepseek-v3","messages":[{"role":"user","content":"你好"}]}'
+  -d '{"model":"kimi-k3","messages":[{"role":"user","content":"你好"}]}'
 ```
 
 ![图片说明](images/chrome.png)
@@ -294,5 +365,6 @@ curl http://127.0.0.1:5000/v1/chat/completions \
 
 ## 联系方式与许可
 
-- 联系邮箱：arnoliu@shanghaitech.edu.cn
-- 本项目采用 MIT 许可证，详见 LICENSE 文件。
+- 原作者联系邮箱：arnoliu@shanghaitech.edu.cn（上游仓库：[ShanghaitechGeekPie/GenAI2OpenAI](https://github.com/ShanghaitechGeekPie/GenAI2OpenAI)）
+- 本分支（2026-09 新版平台适配）的 issue 请提在本 fork 仓库。
+- 本项目采用 MIT 许可证（保留原作者版权与许可声明），详见 LICENSE 文件。
