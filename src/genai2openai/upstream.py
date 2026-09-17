@@ -108,6 +108,7 @@ def stream_genai_events(messages, model, max_tokens, settings: Settings, access_
             return
 
         finished = False
+        logged_first_chunk = False
         for line in response.iter_lines():
             if finished:
                 break
@@ -126,7 +127,10 @@ def stream_genai_events(messages, model, max_tokens, settings: Settings, access_
 
                     if line_str:
                         genai_json = json.loads(line_str)
-                        logger.debug("Upstream SSE chunk keys: %s", list(genai_json.keys()))
+                        # 每个请求只记录首个 chunk 的 keys，避免刷屏。
+                        if not logged_first_chunk:
+                            logger.debug("Upstream first SSE chunk keys: %s", list(genai_json.keys()))
+                            logged_first_chunk = True
 
                         # 上游错误以 {"code":500,"errMsg":"..."} 数据行返回，必须显式透出，
                         # 否则会被静默吞掉表现为空响应。

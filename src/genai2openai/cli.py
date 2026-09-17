@@ -31,11 +31,15 @@ def parse_args():
 
 def setup_logging(log_level):
     console = Console()
+    level = getattr(logging, log_level.upper(), logging.INFO)
+    # 控制台 + 文件双写：终端滚走的内容可以在 genai2openai.log 里翻。
+    file_handler = logging.FileHandler("genai2openai.log", encoding="utf-8")
+    file_handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(name)s: %(message)s'))
     logging.basicConfig(
-        level=getattr(logging, log_level.upper(), logging.INFO),
+        level=level,
         format='%(message)s',
         datefmt='[%X]',
-        handlers=[RichHandler(console=console, rich_tracebacks=True)],
+        handlers=[RichHandler(console=console, rich_tracebacks=True), file_handler],
     )
 
 
