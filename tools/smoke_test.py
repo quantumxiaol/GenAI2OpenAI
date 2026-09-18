@@ -2,8 +2,8 @@
 """冒烟测试：验证代理核心链路（需要校内网络 + 服务已启动）。
 
 用法：
-    uv run tools/smoke_test.py                          # 默认打 http://127.0.0.1:11435
-    uv run tools/smoke_test.py --base-url http://127.0.0.1:11435
+    uv run tools/smoke_test.py                          # 默认打 GENAI_API_BASE_URL 或本机 http://127.0.0.1:11435
+    uv run tools/smoke_test.py --base-url http://127.0.0.1:11435   # flag 优先于环境变量
 """
 
 import argparse
@@ -56,13 +56,21 @@ def auth_headers(api_key):
     return {"Authorization": f"Bearer {api_key}"} if api_key else {}
 
 
+def normalize_base_url(value):
+    """接受带不带 /v1 后缀两种写法，返回 (root, v1) 两个基地址。"""
+    value = value.rstrip("/")
+    root = value[:-3] if value.endswith("/v1") else value
+    return root, root + "/v1"
+
+
 def main():
     parser = argparse.ArgumentParser(description="GenAI2OpenAI smoke test")
-    parser.add_argument("--base-url", default="http://127.0.0.1:11435", help="proxy base URL (without /v1)")
+    parser.add_argument("--base-url", default=os.environ.get("GENAI_API_BASE_URL", "http://127.0.0.1:11435"),
+                        help="proxy base URL (with or without /v1; default: GENAI_API_BASE_URL env or local)")
     parser.add_argument("--api-key", default=os.environ.get("GENAI_API_KEY"),
                         help="proxy API key (default: read GENAI_API_KEY env)")
     args = parser.parse_args()
-    base_url = args.base_url.rstrip("/")
+    base_url, v1_url = normalize_base_url(args.base_url)
     _HEADERS.update(auth_headers(args.api_key))
 
     results = []
@@ -74,7 +82,7 @@ def main():
     results.append(check("health", t_health))
 
     def t_models():
-        resp = requests.get(f"{base_url}/v1/models", headers=_HEADERS, timeout=TIMEOUT)
+        resp = requests.get(f"{v1_url}/models", headers=_HEADERS, timeout=TIMEOUT)
         ids = [m["id"] for m in resp.json().get("data", [])]
         return "kimi-k3" in ids and "deepseek-v4.1" in ids, f"{len(ids)} models: {ids}"
 

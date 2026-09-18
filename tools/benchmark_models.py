@@ -1,5 +1,6 @@
 import argparse
 import json
+import os
 import time
 
 import requests
@@ -7,7 +8,8 @@ import requests
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Benchmark all exposed models via OpenAI-compatible streaming API")
-    parser.add_argument("--base-url", default="http://127.0.0.1:11435/v1", help="OpenAI-compatible API base URL")
+    parser.add_argument("--base-url", default=os.environ.get("GENAI_API_BASE_URL", "http://127.0.0.1:11435/v1"),
+                        help="OpenAI-compatible API base URL (default: GENAI_API_BASE_URL env or local)")
     parser.add_argument("--api-key", default=None, help="API key or GenAI token to send as Bearer auth")
     parser.add_argument("--prompt", default="请用中文简要介绍上海科技大学，并尽量输出约300字。", help="Prompt used for each benchmark")
     parser.add_argument("--max-tokens", type=int, default=512, help="max_tokens for each request")
@@ -150,6 +152,10 @@ def format_result_line(result):
 
 def main():
     args = parse_args()
+    base_url = args.base_url.rstrip("/")
+    if not base_url.endswith("/v1"):
+        base_url += "/v1"
+    args.base_url = base_url
     headers = build_headers(args.api_key)
     models = args.models or fetch_models(args.base_url, headers, args.timeout)
     if not models:

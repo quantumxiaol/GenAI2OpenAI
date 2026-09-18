@@ -40,17 +40,21 @@ def message_of(data):
 def main():
     parser = argparse.ArgumentParser(description="Test tool-calling compatibility through the proxy")
     parser.add_argument("--model", default="deepseek-v4.1")
-    parser.add_argument("--base-url", default="http://127.0.0.1:11435")
+    parser.add_argument("--base-url", default=os.environ.get("GENAI_API_BASE_URL", "http://127.0.0.1:11435"),
+                        help="proxy base URL (with or without /v1; default: GENAI_API_BASE_URL env or local)")
     parser.add_argument("--api-key", default=os.environ.get("GENAI_API_KEY"),
                         help="proxy API key (default: read GENAI_API_KEY env)")
     parser.add_argument("--loop", action="store_true", help="simulate a multi-turn tool loop")
     args = parser.parse_args()
     headers = {"Authorization": f"Bearer {args.api_key}"} if args.api_key else {}
+    base_url = args.base_url.rstrip("/")
+    if base_url.endswith("/v1"):
+        base_url = base_url[:-3]
 
     messages = [{"role": "user", "content": "上海今天适合带伞吗？请调用工具查询天气后再回答"}]
 
     # 第一轮：期望模型发起工具调用
-    data = post_chat(args.base_url, headers=headers, payload={
+    data = post_chat(base_url, headers=headers, payload={
         "model": args.model, "messages": messages, "tools": [TOOL],
         "tool_choice": "auto", "stream": False, "max_tokens": 2048,
     })
@@ -79,7 +83,7 @@ def main():
             "content": "上海，今日多云转小雨，气温 22-26℃，建议携带雨伞。",
         })
 
-    data2 = post_chat(args.base_url, headers=headers, payload={
+    data2 = post_chat(base_url, headers=headers, payload={
         "model": args.model, "messages": messages, "tools": [TOOL],
         "tool_choice": "auto", "stream": False, "max_tokens": 2048,
     })
