@@ -100,9 +100,10 @@ def images_generations():
             "created": result.get("created"),
             "data": data,
         }
-        # 上游给了真实 usage（文生图 token 明细），原样透出。
-        if result.get("usage"):
-            body["usage"] = result["usage"]
+        # 上游给的元数据（usage 为真实 token 数）原样透出。
+        for key in ("background", "output_format", "quality", "size", "usage"):
+            if result.get(key) is not None:
+                body[key] = result[key]
         return jsonify(body)
 
     except Exception as e:
