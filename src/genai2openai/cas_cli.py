@@ -2,9 +2,12 @@ import argparse
 import json
 
 from .cas import LoginError, login_genai
+from .config import apply_proxy_policy, load_dotenv
 
 
 def main():
+    load_dotenv()
+    apply_proxy_policy()
     parser = argparse.ArgumentParser(description="ShanghaiTech GenAI CAS auto login utility")
     parser.add_argument("--credential", required=True, help="Credential in the format student_id@password")
     args = parser.parse_args()

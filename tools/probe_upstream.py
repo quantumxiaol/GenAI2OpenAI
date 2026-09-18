@@ -25,7 +25,7 @@ import os
 import requests
 
 from genai2openai.auth import load_cached_token
-from genai2openai.config import GENAI_URL, Settings, build_genai_headers
+from genai2openai.config import GENAI_URL, Settings, apply_proxy_policy, build_genai_headers, load_dotenv
 from genai2openai.registry import fetch_remote_models
 
 
@@ -49,6 +49,8 @@ def parse_args():
 
 
 def main():
+    load_dotenv()
+    apply_proxy_policy()
     args = parse_args()
     token = args.token or load_cached_token()
     if not token:

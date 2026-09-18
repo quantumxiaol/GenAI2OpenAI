@@ -6,7 +6,7 @@ from rich.console import Console
 from rich.logging import RichHandler
 
 from .auth import auto_login_with_account, load_cached_token, validate_cached_token
-from .config import DEFAULT_HOST, DEFAULT_PORT, DEFAULT_UPLOAD_TOKEN, Settings, load_dotenv
+from .config import DEFAULT_HOST, DEFAULT_PORT, DEFAULT_UPLOAD_TOKEN, Settings, apply_proxy_policy, load_dotenv
 from .registry import log_new_remote_models
 from .routes import create_app
 
@@ -62,6 +62,7 @@ def resolve_port(cli_port):
 
 def main():
     load_dotenv()
+    apply_proxy_policy()
     args = parse_args()
     settings = Settings(
         token=args.token or os.environ.get("GENAI_TOKEN"),

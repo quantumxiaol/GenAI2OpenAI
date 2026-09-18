@@ -10,12 +10,24 @@ import truststore
 
 truststore.inject_into_ssl()
 
-# 学校域名强制绕过代理（直连）：
-# 本机代理客户端（Clash 等）的规则未必覆盖全部学校域名，且代理链路上的
-# TLS-in-TLS 与 MITM 都会带来额外故障面。校内直连总是可达；校外本来就被网关拦。
-_no_proxy = os.environ.get("NO_PROXY") or os.environ.get("no_proxy") or ""
-_school_domains = "shanghaitech.edu.cn"
-os.environ["NO_PROXY"] = f"{_no_proxy},{_school_domains}" if _no_proxy else _school_domains
+
+def apply_proxy_policy():
+    """学校域名默认强制直连（绕过本机代理客户端）。
+
+    本机代理（Clash 等）的规则未必覆盖全部学校域名，且代理链路的 TLS-in-TLS
+    与 MITM 都是故障面。若在校外通过学校 VPN 的 HTTP 代理形态或校园网出口
+    节点访问，可在 .env 设 GENAI_SCHOOL_DIRECT=0 关闭此行为（EasyConnect 这类
+    路由层 VPN 不受影响，无需设置）。
+
+    必须在 load_dotenv() 之后、首个上游请求之前调用。
+    """
+    direct = os.environ.get("GENAI_SCHOOL_DIRECT", "1").strip().lower() not in ("0", "false", "no", "off")
+    if not direct:
+        return
+    existing = os.environ.get("NO_PROXY") or os.environ.get("no_proxy") or ""
+    domain = "shanghaitech.edu.cn"
+    if domain not in existing:
+        os.environ["NO_PROXY"] = f"{existing},{domain}" if existing else domain
 
 GENAI_BASE_URL = "https://genai.shanghaitech.edu.cn"
 IDS_BASE_URL = "https://ids.shanghaitech.edu.cn"
