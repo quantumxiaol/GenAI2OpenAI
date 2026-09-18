@@ -8,6 +8,7 @@ from ..config import Settings
 SETTINGS_CONFIG_KEY = "GENAI2OPENAI_SETTINGS"
 
 from .chat import chat_bp  # noqa: E402
+from .image_gen import image_gen_bp  # noqa: E402
 from .meta import meta_bp  # noqa: E402
 from .responses import responses_bp  # noqa: E402
 
@@ -49,4 +50,5 @@ def create_app(settings: Settings) -> Flask:
     app.register_blueprint(chat_bp)
     app.register_blueprint(responses_bp)
     app.register_blueprint(meta_bp)
+    app.register_blueprint(image_gen_bp)
     return app

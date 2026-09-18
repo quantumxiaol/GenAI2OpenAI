@@ -51,6 +51,7 @@ GenAI 是一个基于 Flask 的聊天机器人接口服务，兼容 OpenAI 的�
 | 旧版函数调用（`functions/function_call`） | 已逐步废弃      | ✅ 兼容        | 自动转换为 `tools/tool_choice` 语义                        |
 | 图片输入（Vision）                        | ✅              | ✅             | 服务端自动上传图片并注入 `imageUrl/width/height`（本地/Azure 模型均已实测） |
 | 模型列表接口（`GET /v1/models`）          | ✅              | ✅             | 返回本项目映射后的可用模型列表                             |
+| 图像生成（`POST /v1/images/generations`） | ✅              | ✅ 已兼容      | 同步返回；相对路径重写为可访问的绝对 URL；usage 为上游真实值 |
 | 认证头兼容（Bearer/API Key）              | ✅              | ✅             | 支持 `Authorization`、`X-Access-Token`、`api-key` 等       |
 | 联网搜索 / 深度思考                        | 无原生字段      | ✅ 已映射      | 模型名后缀 `-search` / `-thinking` / `-nothink` 或请求体 `net_go` / `thinking` 字段 |
 | Token 用量（usage）                        | ✅              | ✅ 部分        | `total_tokens` 为上游真实值；`prompt`/`completion` 分项为估算 |
@@ -332,6 +333,18 @@ curl http://127.0.0.1:11435/v1/chat/completions \
 - 后缀可组合，如 `kimi-k3-search-thinking`；适用于全部模型，大小写不敏感。
 - 不指定时跟随上游默认。注意 `thinking` 开关的实际效果取决于模型：DeepSeek-V4.1、Kimi-K3 等都可用 `-thinking` 开启思维链（上游 2026-09-18 起 K3 默认不再强制思考，想快就直接用默认形态）。
 - 联网检索结果直接融入回答文本（含引用标记），无额外返回字段。
+
+### 图像生成
+
+`POST /v1/images/generations`（OpenAI Images API 兼容），模型 `gpt-image-2.5` / `gpt-image-1.5`（GPT 系额度 100 万 tokens/月，实测一张 low/1024x1024 约 220 tokens）：
+
+```bash
+curl http://127.0.0.1:11435/v1/images/generations \
+  -H "Content-Type: application/json" \
+  -d '{"model": "gpt-image-2.5", "prompt": "一只在月光下的猫，扁平插画风格", "size": "1024x1024", "quality": "low"}'
+```
+
+返回 `data[0].url` 为可直接访问的图片 URL（上游返回相对路径，代理已重写为绝对地址）；`size` / `quality`（low/medium/high）/ `style` / `output_format` / `n` 平铺透传；垫图用 `image_base64` 字段（纯 base64 或 data URL）。
 
 ### 会话记录
 
