@@ -9,6 +9,7 @@
 import argparse
 import base64
 import json
+import os
 import struct
 import sys
 import zlib
@@ -16,6 +17,9 @@ import zlib
 import requests
 
 TIMEOUT = 120
+
+# 服务开启 GENAI_API_KEY 鉴权时，所有请求携带的认证头（在 main 里填充）。
+_HEADERS = {}
 
 
 def make_red_png_data_url():
@@ -43,15 +47,23 @@ def check(name, fn):
 def post_chat(base_url, body):
     # 冒烟流量统一归组到 SmokeTest 会话，避免在网页版刷屏（图片请求除外，见上游限制）。
     body.setdefault("chat_group_id", "SmokeTest")
-    resp = requests.post(f"{base_url}/v1/chat/completions", json=body, timeout=TIMEOUT)
+    resp = requests.post(f"{base_url}/v1/chat/completions", json=body, headers=_HEADERS, timeout=TIMEOUT)
     return resp
+
+
+def auth_headers(api_key):
+    """服务开启 GENAI_API_KEY 鉴权时携带的认证头。"""
+    return {"Authorization": f"Bearer {api_key}"} if api_key else {}
 
 
 def main():
     parser = argparse.ArgumentParser(description="GenAI2OpenAI smoke test")
     parser.add_argument("--base-url", default="http://127.0.0.1:11435", help="proxy base URL (without /v1)")
+    parser.add_argument("--api-key", default=os.environ.get("GENAI_API_KEY"),
+                        help="proxy API key (default: read GENAI_API_KEY env)")
     args = parser.parse_args()
     base_url = args.base_url.rstrip("/")
+    _HEADERS.update(auth_headers(args.api_key))
 
     results = []
 
@@ -62,7 +74,7 @@ def main():
     results.append(check("health", t_health))
 
     def t_models():
-        resp = requests.get(f"{base_url}/v1/models", timeout=TIMEOUT)
+        resp = requests.get(f"{base_url}/v1/models", headers=_HEADERS, timeout=TIMEOUT)
         ids = [m["id"] for m in resp.json().get("data", [])]
         return "kimi-k3" in ids and "deepseek-v4.1" in ids, f"{len(ids)} models: {ids}"
 

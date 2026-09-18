@@ -153,7 +153,7 @@ GENAI_API_KEY=   # 通过 frp 等暴露到本机以外时务必设置
 2. frp 的 frpc 与本服同机时，保持默认 `--host 127.0.0.1` 即可（frpc 会代连本机回环端口），不要把服务直接绑到公网网卡；
 3. 客户端把 `apiKey` 配成同一个密钥（opencode 配置里的 `"apiKey": "unused"` 换成真实密钥）。
 
-frpc 配置（与你既有的 Minecraft/ssh 条目同风格，TCP 模式）：
+frpc 配置（TCP 模式）：
 
 ```toml
 [[proxies]]
