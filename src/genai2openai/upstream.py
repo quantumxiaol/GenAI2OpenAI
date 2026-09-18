@@ -44,7 +44,7 @@ def _parse_total_tokens(other):
 
 
 def stream_genai_events(messages, model, max_tokens, settings: Settings, access_token=None, image_payload=None,
-                        net_go=False, thinking=None):
+                        net_go=False, thinking=None, chat_group_id=None):
     """调用 GenAI 流式接口并产出统一事件流。
 
     该函数是整个协议转换的底层入口，负责：
@@ -60,6 +60,8 @@ def stream_genai_events(messages, model, max_tokens, settings: Settings, access_
         access_token (str | None): 请求级 GenAI token，未提供时使用启动参数。
         net_go (bool): 联网搜索开关（上游字段 netGo）。
         thinking (bool | None): 深度思考开关；None 表示不发送该字段，跟随上游默认。
+        chat_group_id (str | None): 请求级会话分组 ID，优先于启动配置
+            （传入空字符串可显式关闭本次归组）。
 
     Yields:
         dict: 统一事件对象，`type` 可能为 `delta`、`done`、`meta` 或 `error`。
@@ -86,10 +88,11 @@ def stream_genai_events(messages, model, max_tokens, settings: Settings, access_
     if thinking is not None:
         genai_data["thinking"] = thinking
     # 上游对 chatGroupId + 图片的组合会报 vLLM 图片加载错误（实测稳定复现），
-    # 带图请求不发分组 ID。
-    if settings.chat_group_id and not image_payload:
-        genai_data["chatGroupId"] = settings.chat_group_id
-    elif settings.chat_group_id and image_payload:
+    # 带图请求不发分组 ID。请求级 chat_group_id 优先于启动配置（空字符串显式关闭）。
+    effective_group_id = chat_group_id if chat_group_id is not None else settings.chat_group_id
+    if effective_group_id and not image_payload:
+        genai_data["chatGroupId"] = effective_group_id
+    elif effective_group_id and image_payload:
         logger.debug("chatGroupId skipped for image request (upstream incompatible)")
     if image_payload:
         genai_data.update(image_payload)
@@ -208,7 +211,7 @@ def stream_genai_events(messages, model, max_tokens, settings: Settings, access_
 
 
 def collect_genai_response(messages, model, max_tokens, settings: Settings, access_token=None, image_payload=None,
-                           net_go=False, thinking=None):
+                           net_go=False, thinking=None, chat_group_id=None):
     """收集完整响应并聚合为非流式结果。
 
     Args:
@@ -233,7 +236,7 @@ def collect_genai_response(messages, model, max_tokens, settings: Settings, acce
     usage_total = None
 
     for event in stream_genai_events(messages, model, max_tokens, settings, access_token, image_payload,
-                                     net_go, thinking):
+                                     net_go, thinking, chat_group_id):
         if event["type"] == "error":
             raise RuntimeError(event["error"])
         if event["type"] == "delta":

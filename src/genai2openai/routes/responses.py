@@ -68,7 +68,8 @@ def build_response_input_messages(input_value):
     return []
 
 
-def stream_responses_api(messages, model, max_tokens, settings, access_token=None, net_go=False, thinking=None):
+def stream_responses_api(messages, model, max_tokens, settings, access_token=None, net_go=False, thinking=None,
+                         chat_group_id=None):
     """将内部事件流转换为最小 Responses API SSE。
 
     Args:
@@ -101,7 +102,7 @@ def stream_responses_api(messages, model, max_tokens, settings, access_token=Non
     yield f"data: {json.dumps(created_event)}\n\n"
 
     for event in stream_genai_events(messages, model, max_tokens, settings, access_token,
-                                     net_go=net_go, thinking=thinking):
+                                     net_go=net_go, thinking=thinking, chat_group_id=chat_group_id):
         if event["type"] == "error":
             error_event = {
                 "type": "response.failed",
@@ -182,6 +183,8 @@ def responses():
         model, model_flags = parse_model_flags(req_data.get('model', 'kimi-k3'))
         net_go = req_data.get('net_go', model_flags.get('net_go', False))
         thinking = req_data.get('thinking', model_flags.get('thinking'))
+        # 请求级会话归组（None=跟随启动配置，空字符串=显式关闭本次归组）。
+        chat_group_id = req_data.get('chat_group_id')
         stream = req_data.get('stream', False)
         max_output_tokens = req_data.get('max_output_tokens', req_data.get('max_tokens', 30000))
         messages = build_response_input_messages(req_data.get('input'))
@@ -193,14 +196,14 @@ def responses():
         if stream:
             return Response(
                 stream_with_context(stream_responses_api(messages, model, max_output_tokens, settings, access_token,
-                                                         net_go, thinking)),
+                                                         net_go, thinking, chat_group_id)),
                 mimetype='text/event-stream',
                 headers=SSE_HEADERS,
             )
 
         # 非流式返回时，将 reasoning 和 message 组装到 output 数组中。
         collected = collect_genai_response(messages, model, max_output_tokens, settings, access_token,
-                                           net_go=net_go, thinking=thinking)
+                                           net_go=net_go, thinking=thinking, chat_group_id=chat_group_id)
         response_id = f"resp_{uuid.uuid4().hex}"
         output = []
         if collected["reasoning_content"]:

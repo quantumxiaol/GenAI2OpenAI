@@ -70,7 +70,7 @@ def build_chat_completion_payload(model, content, reasoning_content=None, tool_c
 
 
 def stream_chat_completions_response(messages, model, max_tokens, settings, access_token=None, image_payload=None,
-                                     net_go=False, thinking=None):
+                                     net_go=False, thinking=None, chat_group_id=None):
     """将内部事件流转换为 Chat Completions SSE。
 
     Args:
@@ -90,7 +90,7 @@ def stream_chat_completions_response(messages, model, max_tokens, settings, acce
     completion_chars = 0
 
     for event in stream_genai_events(messages, model, max_tokens, settings, access_token, image_payload,
-                                     net_go, thinking):
+                                     net_go, thinking, chat_group_id):
         if event["type"] == "error":
             yield f"data: {json.dumps({'error': event['error']})}\n\n"
             return
@@ -244,6 +244,8 @@ def chat_completions():
         model, model_flags = parse_model_flags(req_data.get('model', 'kimi-k3'))
         net_go = req_data.get('net_go', model_flags.get('net_go', False))
         thinking = req_data.get('thinking', model_flags.get('thinking'))
+        # 请求级会话归组（None=跟随启动配置，空字符串=显式关闭本次归组）。
+        chat_group_id = req_data.get('chat_group_id')
         stream = req_data.get('stream', False)
         max_tokens = req_data.get('max_tokens', req_data.get('max_completion_tokens', 30000))
         tools = get_request_tools(req_data)
@@ -274,7 +276,7 @@ def chat_completions():
         if stream:
             if tools_enabled:
                 collected = collect_genai_response(upstream_messages, model, max_tokens, settings, access_token, image_payload,
-                                                   net_go, thinking)
+                                                   net_go, thinking, chat_group_id)
                 # 记录原始输出，便于定位"模型只宣布不调用"之类的解析失败。
                 logger.debug("tools path raw content (first 500): %r", collected["content"][:500])
                 tool_calls = parse_tool_calls_from_content(collected["content"])
@@ -286,14 +288,14 @@ def chat_completions():
 
             return Response(
                 stream_with_context(stream_chat_completions_response(upstream_messages, model, max_tokens, settings, access_token, image_payload,
-                                                                     net_go, thinking)),
+                                                                     net_go, thinking, chat_group_id)),
                 mimetype='text/event-stream',
                 headers=SSE_HEADERS,
             )
 
         # 非流式模式先完整收集，再一次性组装 OpenAI 响应体。
         collected = collect_genai_response(upstream_messages, model, max_tokens, settings, access_token, image_payload,
-                                           net_go, thinking)
+                                           net_go, thinking, chat_group_id)
         if tools_enabled:
             logger.debug("tools path raw content (first 500): %r", collected["content"][:500])
         tool_calls = parse_tool_calls_from_content(collected["content"]) if tools_enabled else []

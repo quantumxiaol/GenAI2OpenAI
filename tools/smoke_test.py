@@ -41,6 +41,8 @@ def check(name, fn):
 
 
 def post_chat(base_url, body):
+    # 冒烟流量统一归组到 SmokeTest 会话，避免在网页版刷屏（图片请求除外，见上游限制）。
+    body.setdefault("chat_group_id", "SmokeTest")
     resp = requests.post(f"{base_url}/v1/chat/completions", json=body, timeout=TIMEOUT)
     return resp
 
@@ -155,20 +157,30 @@ def main():
     results.append(check("流式输出", t_stream))
 
     def t_vision():
-        # 生成一张 64x64 纯红 PNG，以 data URL 形式走代理完整链路（上传 + 对话）。
-        png_data_url = make_red_png_data_url()
-        resp = post_chat(base_url, {
-            "model": "kimi-k3",
-            "messages": [{"role": "user", "content": [
-                {"type": "text", "text": "这张图片的主体颜色是什么？只回答颜色名"},
-                {"type": "image_url", "image_url": {"url": png_data_url}},
-            ]}],
-            "max_tokens": 128,
-        })
-        content = resp.json()["choices"][0]["message"].get("content") or ""
-        return "红" in content or "red" in content.lower(), f"content={content[:60]!r}"
+        # 上游 vLLM 拉取图片的 connect timeout 只有 3s，偶有抖动，允许重试一次。
+        last_detail = ""
+        for _ in range(2):
+            # 生成一张 64x64 纯红 PNG，以 data URL 形式走代理完整链路（上传 + 对话）。
+            png_data_url = make_red_png_data_url()
+            resp = post_chat(base_url, {
+                "model": "kimi-k3",
+                "messages": [{"role": "user", "content": [
+                    {"type": "text", "text": "这张图片的主体颜色是什么？只回答颜色名"},
+                    {"type": "image_url", "image_url": {"url": png_data_url}},
+                ]}],
+                "max_tokens": 128,
+            })
+            data = resp.json()
+            if "choices" not in data:
+                last_detail = f"error={str(data.get('error'))[:80]!r}"
+                continue
+            content = data["choices"][0]["message"].get("content") or ""
+            last_detail = f"content={content[:60]!r}"
+            if "红" in content or "red" in content.lower():
+                return True, last_detail
+        return False, last_detail
 
-    results.append(check("图片输入（kimi-k3 视觉）", t_vision))
+    results.append(check("图片输入（kimi-k3 视觉，允许重试）", t_vision))
 
     print()
     passed = sum(results)
