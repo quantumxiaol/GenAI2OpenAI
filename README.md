@@ -246,7 +246,8 @@ opencode 对自定义 provider 的模型默认不启用工具调用，需要在�
       "name": "GenAI",
       "options": {
         "baseURL": "http://127.0.0.1:11435/v1",
-        "apiKey": "unused"
+        "apiKey": "unused",
+        "headers": { "X-GenAI-Chat-Group": "opencode" }
       },
       "models": {
         "kimi-k3":                { "name": "Kimi K3",             "tool_call": true, "reasoning": true, "limit": { "context": 131072, "output": 16384 } },
@@ -351,7 +352,7 @@ curl http://127.0.0.1:11435/v1/images/generations \
 默认情况下，每次 API 请求都会以最后一条用户消息为标题，在 GenAI 网页版会话列表中创建一条新会话。两种归组方式：
 
 - **服务端级**：启动时加 `--chat-group-id <固定串>`（或 `.env` 配置 `GENAI_CHAT_GROUP_ID`），所有 API 请求归入同一条会话。
-- **请求级**：请求体加 `"chat_group_id": "<名字>"` 覆盖启动配置（传空字符串可单次关闭归组）。客户端可以借此把自己的流量归到专属会话，例如 `"chat_group_id": "opencode"`。
+- **请求级**：请求体加 `"chat_group_id": "<名字>"` 覆盖启动配置（传空字符串可单次关闭归组）。不能自定义请求体的标准客户端（如 opencode）改用请求头 `X-GenAI-Chat-Group: <名字>`（上文 opencode 配置已带）。客户端可以借此把自己的流量归到专属会话。
 
 两个例外：带图片的请求不携带分组 ID（上游对该组合会报图片加载错误）；归组只影响网页版的记录归档，每次请求的上下文仍由 `messages` 决定，不会互相串味。
 

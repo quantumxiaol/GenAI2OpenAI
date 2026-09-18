@@ -245,7 +245,12 @@ def chat_completions():
         net_go = req_data.get('net_go', model_flags.get('net_go', False))
         thinking = req_data.get('thinking', model_flags.get('thinking'))
         # 请求级会话归组（None=跟随启动配置，空字符串=显式关闭本次归组）。
+        # 请求体字段优先；不能自定义 body 的标准客户端（如 opencode）用 X-GenAI-Chat-Group 头。
         chat_group_id = req_data.get('chat_group_id')
+        if chat_group_id is None:
+            header_group_id = request.headers.get('X-GenAI-Chat-Group')
+            if header_group_id:
+                chat_group_id = header_group_id
         stream = req_data.get('stream', False)
         max_tokens = req_data.get('max_tokens', req_data.get('max_completion_tokens', 30000))
         tools = get_request_tools(req_data)
