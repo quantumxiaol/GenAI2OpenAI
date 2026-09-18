@@ -10,6 +10,13 @@ import truststore
 
 truststore.inject_into_ssl()
 
+# 学校域名强制绕过代理（直连）：
+# 本机代理客户端（Clash 等）的规则未必覆盖全部学校域名，且代理链路上的
+# TLS-in-TLS 与 MITM 都会带来额外故障面。校内直连总是可达；校外本来就被网关拦。
+_no_proxy = os.environ.get("NO_PROXY") or os.environ.get("no_proxy") or ""
+_school_domains = "shanghaitech.edu.cn"
+os.environ["NO_PROXY"] = f"{_no_proxy},{_school_domains}" if _no_proxy else _school_domains
+
 GENAI_BASE_URL = "https://genai.shanghaitech.edu.cn"
 IDS_BASE_URL = "https://ids.shanghaitech.edu.cn"
 GENAI_URL = f"{GENAI_BASE_URL}/htk/chat/start/chat"

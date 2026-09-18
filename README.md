@@ -49,7 +49,7 @@ GenAI 是一个基于 Flask 的聊天机器人接口服务，兼容 OpenAI 的�
 | 推理内容字段（reasoning）                 | 部分模型支持    | ✅ 兼容输出    | 通过 `reasoning_content` / `response.reasoning.delta` 暴露 |
 | Tool Calling（`tools/tool_choice`）       | ✅ 原生         | ✅ 提示词兼容  | 上游无原生工具调用，本项目做 JSON 约定与本地解析           |
 | 旧版函数调用（`functions/function_call`） | 已逐步废弃      | ✅ 兼容        | 自动转换为 `tools/tool_choice` 语义                        |
-| 图片输入（Vision）                        | ✅              | ✅（GPT 模型） | 服务端自动上传图片并注入 `imageUrl/width/height`           |
+| 图片输入（Vision）                        | ✅              | ✅             | 服务端自动上传图片并注入 `imageUrl/width/height`（本地/Azure 模型均已实测） |
 | 模型列表接口（`GET /v1/models`）          | ✅              | ✅             | 返回本项目映射后的可用模型列表                             |
 | 认证头兼容（Bearer/API Key）              | ✅              | ✅             | 支持 `Authorization`、`X-Access-Token`、`api-key` 等       |
 | 联网搜索 / 深度思考                        | 无原生字段      | ✅ 已映射      | 模型名后缀 `-search` / `-thinking` / `-nothink` 或请求体 `net_go` / `thinking` 字段 |
@@ -157,7 +157,7 @@ GENAI_API_KEY=   # 通过 frp 等暴露到本机以外时务必设置
 - 兼容 OpenAI API，支持 `POST /v1/chat/completions`、`POST /v1/responses`接口，实现智能聊天功能。
 - 支持流式（stream）及非流式响应，方便高效地获取 AI 回复。
 - `POST /v1/chat/completions` 支持基于提示词工程和 JSON 解析的 OpenAI `tools`/`tool_choice` 兼容工具调用，也兼容旧版 `functions`/`function_call` 入参。
-- `POST /v1/chat/completions` 支持图片输入（服务端自动上传到 GenAI 图片服务后再发起对话），当前**仅 GPT 系列模型可用**。
+- `POST /v1/chat/completions` 支持图片输入（服务端自动上传到 GenAI 图片服务后再发起对话），本地与 Azure 模型均已验证可用。
 - 提供 `/v1/models` 接口列出可用模型，如 `kimi-k3`、`deepseek-v4.1`、`gpt-6-astra`、`glm-5.3-flash` 等。
 - 内置 `/health` 健康检查接口，用于服务状态监测。
 
@@ -276,7 +276,7 @@ opencode 对自定义 provider 的模型默认不启用工具调用，需要在�
 - `limit.context` 是估算值（自定义模型没有元数据），实测后可用 `tools/skills/context_length_tester` 校准。
 - 模型选择建议：agent 任务主力 `deepseek-v4.1`（快、不话痨）；重推理用 `kimi-k3`（强制思考，慢但深）；GPT 系有 100 万 tokens/月额度，留给本地模型解决不了的硬任务。
 
-### 图片输入（仅 GPT 模型）
+### 图片输入
 
 `/v1/chat/completions` 支持 OpenAI 常见多模态消息格式：
 
@@ -290,10 +290,9 @@ opencode 对自定义 provider 的模型默认不启用工具调用，需要在�
 2. 自动调用 GenAI 图片上传接口 `https://genaipic.shanghaitech.edu.cn//sys/common/upload`。
 3. 将返回的 `imageUrl`、`width`、`height` 透传到上游对话请求。
 
-限制：
+2026-09-18 实测：本地部署模型（kimi-k3、deepseek-v4.1）与 Azure 路由模型均可正常读图，`imageUrl` 与 `imageUrls[]` 两种字段形式上游都接受。
 
-- 图片能力仅对 GPT/Azure 路由模型开放（如 `gpt-6-astra`、`gpt-5.6-sol`）。
-- 若对非 GPT 模型传图，请求会返回错误：`Image input is only available for GPT models`。
+注意：带图片的请求不会携带 `chatGroupId`（上游对该组合会报图片加载错误），因此图片问答不会归入归组会话。
 
 示例：
 

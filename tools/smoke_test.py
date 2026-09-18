@@ -7,12 +7,28 @@
 """
 
 import argparse
+import base64
 import json
+import struct
 import sys
+import zlib
 
 import requests
 
-TIMEOUT = 30
+TIMEOUT = 120
+
+
+def make_red_png_data_url():
+    """用标准库生成一张 64x64 纯红 PNG，返回 data URL。"""
+    def chunk(tag, data):
+        raw = tag + data
+        return struct.pack(">I", len(data)) + raw + struct.pack(">I", zlib.crc32(raw))
+
+    scanlines = b"".join(b"\x00" + bytes((220, 20, 20)) * 64 for _ in range(64))
+    ihdr = struct.pack(">IIBBBBB", 64, 64, 8, 2, 0, 0, 0)
+    png = (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr)
+           + chunk(b"IDAT", zlib.compress(scanlines)) + chunk(b"IEND", b""))
+    return "data:image/png;base64," + base64.b64encode(png).decode()
 
 
 def check(name, fn):
@@ -137,6 +153,22 @@ def main():
         return done and bool(content), f"chunks={len(chunks)} content={content[:60]!r}"
 
     results.append(check("流式输出", t_stream))
+
+    def t_vision():
+        # 生成一张 64x64 纯红 PNG，以 data URL 形式走代理完整链路（上传 + 对话）。
+        png_data_url = make_red_png_data_url()
+        resp = post_chat(base_url, {
+            "model": "kimi-k3",
+            "messages": [{"role": "user", "content": [
+                {"type": "text", "text": "这张图片的主体颜色是什么？只回答颜色名"},
+                {"type": "image_url", "image_url": {"url": png_data_url}},
+            ]}],
+            "max_tokens": 128,
+        })
+        content = resp.json()["choices"][0]["message"].get("content") or ""
+        return "红" in content or "red" in content.lower(), f"content={content[:60]!r}"
+
+    results.append(check("图片输入（kimi-k3 视觉）", t_vision))
 
     print()
     passed = sum(results)

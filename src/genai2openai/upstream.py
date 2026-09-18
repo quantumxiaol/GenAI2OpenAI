@@ -85,8 +85,12 @@ def stream_genai_events(messages, model, max_tokens, settings: Settings, access_
         genai_data["netGo"] = True
     if thinking is not None:
         genai_data["thinking"] = thinking
-    if settings.chat_group_id:
+    # 上游对 chatGroupId + 图片的组合会报 vLLM 图片加载错误（实测稳定复现），
+    # 带图请求不发分组 ID。
+    if settings.chat_group_id and not image_payload:
         genai_data["chatGroupId"] = settings.chat_group_id
+    elif settings.chat_group_id and image_payload:
+        logger.debug("chatGroupId skipped for image request (upstream incompatible)")
     if image_payload:
         genai_data.update(image_payload)
 

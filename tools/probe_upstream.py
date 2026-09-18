@@ -20,6 +20,7 @@
 
 import argparse
 import json
+import os
 
 import requests
 
@@ -42,6 +43,8 @@ def parse_args():
     thinking_group.add_argument("--thinking", action="store_true", help="enable deep thinking (upstream thinking)")
     thinking_group.add_argument("--nothink", action="store_true", help="explicitly disable deep thinking")
     parser.add_argument("--chat-group-id", default=None, help="send a fixed chatGroupId")
+    parser.add_argument("--image", default=None, help="attach an image (local path / URL / data URL), uploaded via the GenAI image service")
+    parser.add_argument("--image-urls-array", action="store_true", help="put the image into imageUrls[] instead of imageUrl/width/height")
     return parser.parse_args()
 
 
@@ -76,6 +79,33 @@ def main():
         payload["thinking"] = False
     if args.chat_group_id:
         payload["chatGroupId"] = args.chat_group_id
+    if args.image:
+        from genai2openai.images import (
+            fetch_image_bytes,
+            read_image_from_data_url,
+            upload_image_to_genai,
+        )
+
+        if args.image.startswith(("http://", "https://")):
+            image_bytes, mime_type, filename = fetch_image_bytes(args.image)
+        elif args.image.startswith("data:"):
+            image_bytes, mime_type, filename = read_image_from_data_url(args.image)
+        else:
+            with open(args.image, "rb") as image_file:
+                image_bytes = image_file.read()
+            mime_type = "image/png" if args.image.lower().endswith(".png") else "image/jpeg"
+            filename = os.path.basename(args.image)
+        image_payload = upload_image_to_genai(image_bytes, filename, mime_type, settings)
+        print("uploaded image:", image_payload)
+        if args.image_urls_array:
+            # imageUrls 数组形式（新版网页端字段），元素结构按 {url,width,height} 猜测
+            payload["imageUrls"] = [{
+                "url": image_payload["imageUrl"],
+                "width": image_payload.get("width"),
+                "height": image_payload.get("height"),
+            }]
+        else:
+            payload.update(image_payload)
     print("POST", args.url)
     print("payload:", json.dumps(payload, ensure_ascii=False))
     print("---")

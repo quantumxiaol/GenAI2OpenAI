@@ -13,7 +13,6 @@ from .config import (
     Settings,
     build_genai_upload_headers,
 )
-from .registry import is_gpt_model
 
 logger = logging.getLogger("genai-proxy")
 
@@ -127,7 +126,7 @@ def parse_image_input_from_message(message):
 
 
 def prepare_image_payload(messages, model, settings: Settings, access_token=None):
-    """从请求消息中准备上游所需图片参数（仅 GPT 模型可用）。"""
+    """从请求消息中准备上游所需图片参数（本地与 Azure 路由模型均已验证可用）。"""
     image_input = None
     for message in reversed(messages):
         image_input = parse_image_input_from_message(message)
@@ -137,10 +136,6 @@ def prepare_image_payload(messages, model, settings: Settings, access_token=None
     if not image_input:
         logger.debug("No image input found in messages")
         return None
-
-    if not is_gpt_model(model):
-        logger.debug("Rejecting image input for non-GPT model: %s", model)
-        raise ValueError("Image input is only available for GPT models")
 
     if image_input.startswith("data:"):
         image_bytes, mime_type, filename = read_image_from_data_url(image_input)
