@@ -153,6 +153,19 @@ GENAI_API_KEY=   # 通过 frp 等暴露到本机以外时务必设置
 2. frp 的 frpc 与本服同机时，保持默认 `--host 127.0.0.1` 即可（frpc 会代连本机回环端口），不要把服务直接绑到公网网卡；
 3. 客户端把 `apiKey` 配成同一个密钥（opencode 配置里的 `"apiKey": "unused"` 换成真实密钥）。
 
+frpc 配置（与你既有的 Minecraft/ssh 条目同风格，TCP 模式）：
+
+```toml
+[[proxies]]
+name = "genai2openai"
+type = "tcp"
+localIP = "127.0.0.1"
+localPort = 11435
+remotePort = 11435
+```
+
+之后外部通过 `http://<frps 服务器地址>:11435/v1` 访问。注意 TCP 模式下 Bearer 密钥是明文过公网的，介意的话可换 frp 的 `stcp`（secret tcp，端到端加密且需 visitor 密钥才能连）或自行套 TLS。
+
 ## 功能和用法
 
 - 兼容 OpenAI API，支持 `POST /v1/chat/completions`、`POST /v1/responses`接口，实现智能聊天功能。
