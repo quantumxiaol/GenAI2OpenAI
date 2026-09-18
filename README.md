@@ -126,6 +126,8 @@ tools/                  # 客户端工具（benchmark、上下文长度测试）
 - `--upload-token`：图片上传接口 `token` 请求头值（默认内置项目当前可用值）。
 - `--log-level`：控制台日志级别，支持 `DEBUG / INFO / WARNING / ERROR / CRITICAL`，默认 `INFO`。
 - `--port`：监听端口，默认 `11435`。
+- `--host`：监听地址，默认 `127.0.0.1`（仅本机）；局域网/反向代理场景用 `--host 0.0.0.0` 显式放开。
+- `--api-key`：代理自身的 API 鉴权密钥，设置后 `/v1/*` 请求需携带 `Authorization: Bearer <key>`（兼容 `X-API-Key` / `api-key` 头）；`/health` 与 CORS 预检放行。**注意**：开启后客户端的 Bearer 头只用于代理鉴权，不再作为上游 token 透传，上游凭据由服务端启动配置（`--account`/`--token`/`.env`）提供。
 - `--chat-group-id`：固定上游会话分组 ID，所有 API 请求归入网页版同一条会话（默认不发送，每次请求各自建会话）。
 
 以上参数都可以写进项目根目录的 `.env` 文件（已 gitignore，参考 `.env.example`），避免密码出现在命令行和进程列表中：
@@ -135,10 +137,20 @@ GENAI_ACCOUNT=学号@密码
 GENAI_TOKEN=eyJ...
 GENAI_UPLOAD_TOKEN=
 GENAI_PORT=11435
+GENAI_HOST=127.0.0.1
 GENAI_CHAT_GROUP_ID=ApiProxy
+GENAI_API_KEY=   # 通过 frp 等暴露到本机以外时务必设置
 ```
 
 命令行参数优先于 `.env`。
+
+### 对外暴露（frp + 鉴权）
+
+要把服务暴露到本机以外（如 frp 穿透），推荐组合：
+
+1. `.env` 设置 `GENAI_API_KEY=<随机长密钥>`（可用 `openssl rand -hex 24` 生成）；
+2. frp 的 frpc 与本服同机时，保持默认 `--host 127.0.0.1` 即可（frpc 会代连本机回环端口），不要把服务直接绑到公网网卡；
+3. 客户端把 `apiKey` 配成同一个密钥（opencode 配置里的 `"apiKey": "unused"` 换成真实密钥）。
 
 ## 功能和用法
 
@@ -259,7 +271,7 @@ opencode 对自定义 provider 的模型默认不启用工具调用，需要在�
 注意：
 
 - `baseURL` 必须是 `http://`（本服务不跑 TLS），末尾带 `/v1`。
-- 服务以 `--account` / `.env` 账号模式启动时 `apiKey` 可任意填。
+- 服务以 `--account` / `.env` 账号模式启动时 `apiKey` 可任意填；服务端设置了 `GENAI_API_KEY`（鉴权模式）时，`apiKey` 必须填同一个密钥。
 - 模型后缀 `-search` / `-thinking` / `-nothink` 直接当独立模型配；`reasoning: true` 让 opencode 把思维链渲染成思考块。
 - `limit.context` 是估算值（自定义模型没有元数据），实测后可用 `tools/skills/context_length_tester` 校准。
 - 模型选择建议：agent 任务主力 `deepseek-v4.1`（快、不话痨）；重推理用 `kimi-k3`（强制思考，慢但深）；GPT 系有 100 万 tokens/月额度，留给本地模型解决不了的硬任务。

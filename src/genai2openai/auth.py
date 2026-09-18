@@ -116,6 +116,10 @@ def get_request_access_token(settings: Settings):
     if settings.account:
         logger.debug("Ignoring request access token because --account is enabled")
         return None
+    if settings.api_key:
+        # 鉴权模式下 Authorization 头是客户端对代理的凭据，不能透传给上游。
+        logger.debug("Ignoring request access token because API key auth is enabled")
+        return None
 
     authorization = request.headers.get("Authorization", "")
     if authorization.lower().startswith("bearer "):

@@ -6,7 +6,7 @@ from rich.console import Console
 from rich.logging import RichHandler
 
 from .auth import auto_login_with_account, load_cached_token, validate_cached_token
-from .config import DEFAULT_PORT, DEFAULT_UPLOAD_TOKEN, Settings, load_dotenv
+from .config import DEFAULT_HOST, DEFAULT_PORT, DEFAULT_UPLOAD_TOKEN, Settings, load_dotenv
 from .registry import log_new_remote_models
 from .routes import create_app
 
@@ -21,6 +21,10 @@ def parse_args():
                         help='GenAI image upload API token header value (也可在 .env 中配置 GENAI_UPLOAD_TOKEN)')
     parser.add_argument('--port', type=int, default=None,
                         help=f'Flask server port (default: {DEFAULT_PORT}；也可在 .env 中配置 GENAI_PORT)')
+    parser.add_argument('--host', type=str, default=None,
+                        help=f'监听地址 (default: {DEFAULT_HOST}；局域网/反向代理场景用 0.0.0.0；也可在 .env 中配置 GENAI_HOST)')
+    parser.add_argument('--api-key', type=str, default=None,
+                        help='代理自身的 API 鉴权密钥，设置后 /v1/* 需携带 Authorization: Bearer (也可在 .env 中配置 GENAI_API_KEY)')
     parser.add_argument('--log-level', type=str, default='INFO',
                         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
                         help='Console log level (default: INFO)')
@@ -63,9 +67,11 @@ def main():
         token=args.token or os.environ.get("GENAI_TOKEN"),
         account=args.account or os.environ.get("GENAI_ACCOUNT"),
         upload_token=args.upload_token or os.environ.get("GENAI_UPLOAD_TOKEN") or DEFAULT_UPLOAD_TOKEN,
+        host=args.host or os.environ.get("GENAI_HOST") or DEFAULT_HOST,
         port=resolve_port(args.port),
         log_level=args.log_level,
         chat_group_id=args.chat_group_id or os.environ.get("GENAI_CHAT_GROUP_ID"),
+        api_key=args.api_key or os.environ.get("GENAI_API_KEY"),
     )
     setup_logging(settings.log_level)
 
@@ -91,7 +97,7 @@ def main():
 
     app = create_app(settings)
     log_new_remote_models(settings)
-    app.run(host='0.0.0.0', port=settings.port, debug=False)
+    app.run(host=settings.host, port=settings.port, debug=False)
 
 
 if __name__ == '__main__':

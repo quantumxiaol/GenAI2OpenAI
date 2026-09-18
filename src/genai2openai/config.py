@@ -45,6 +45,9 @@ DEFAULT_UPLOAD_TOKEN = "2ea38f293adb4abca21132feba61eaa3"
 # 默认端口：Ollama 默认端口 11434 的后一位（避开 macOS AirPlay 占用的 5000）。
 DEFAULT_PORT = 11435
 
+# 默认监听地址：仅本机回环。需要局域网/反向代理访问时用 --host 0.0.0.0 显式放开。
+DEFAULT_HOST = "127.0.0.1"
+
 
 def load_dotenv(path=".env"):
     """极简 .env 加载：KEY=VALUE 逐行读入环境变量，不覆盖已存在的变量。"""
@@ -72,11 +75,14 @@ class Settings:
     token: str | None = None
     account: str | None = None
     upload_token: str = DEFAULT_UPLOAD_TOKEN
+    host: str = DEFAULT_HOST
     port: int = DEFAULT_PORT
     log_level: str = "INFO"
     # 固定上游会话分组 ID：所有 API 请求归入网页版同一条会话；
     # 为空则不发送，每次请求在网页版各自建一条会话。
     chat_group_id: str | None = None
+    # 代理自身的 API 鉴权密钥；设置后 /v1/* 需要 `Authorization: Bearer <key>`。
+    api_key: str | None = None
 
 
 def build_genai_headers(settings: Settings, access_token: str | None = None) -> dict:
