@@ -105,7 +105,7 @@ class ContextLengthTester:
         return haystack, actual_tokens
     
     def send_request(self, messages, max_tokens=100, timeout=180):
-        """发送请求到 API。"""
+        """发送请求到 API。上游偶发 500（平台抖动），5xx 时自动重试一次。"""
         payload = {
             "model": self.model,
             "messages": messages,
@@ -113,12 +113,17 @@ class ContextLengthTester:
             "stream": False,
             "temperature": 0.0,
         }
-        
-        try:
-            resp = requests.post(self.api_url, headers=self.headers, json=payload, timeout=timeout)
-            return resp
-        except Exception as e:
-            return type('obj', (object,), {'status_code': -1, 'text': str(e)})
+
+        for attempt in range(2):
+            try:
+                resp = requests.post(self.api_url, headers=self.headers, json=payload, timeout=timeout)
+                if resp.status_code < 500 or attempt == 1:
+                    return resp
+                time.sleep(2)
+            except Exception as e:
+                if attempt == 1:
+                    return type('obj', (object,), {'status_code': -1, 'text': str(e)})
+                time.sleep(2)
     
     def probe_context_size(self, low=1000, high=200000):
         """
