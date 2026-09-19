@@ -30,6 +30,37 @@ logger = logging.getLogger("genai-proxy")
 
 chat_bp = Blueprint("chat", __name__)
 
+# 空轮重试时的催问文本：模型吐原生工具 token 被服务层剥掉时会产出空轮，
+# 追加这句通常能让它改用约定的 JSON 格式（实测 5/5 救回）。
+TURN_NUDGE = ("（系统提示）你刚才没有给出任何可见回答。如果任务需要工具，请直接输出 tool_calls JSON"
+              "（不要先写解释文字）；如果不需要工具，请用文字回答。")
+
+
+def collect_tool_turn(messages, model, max_tokens, settings, access_token, image_payload,
+                      net_go, thinking, chat_group_id):
+    """工具路径的上游收集：正文与思维链都参与调用解析；空轮追加催问重试一次。
+
+    Returns:
+        tuple[dict, list]: (collect_genai_response 聚合结果, 解析出的 tool_calls)。
+    """
+    collected = collect_genai_response(messages, model, max_tokens, settings, access_token, image_payload,
+                                       net_go, thinking, chat_group_id)
+    logger.debug("tools path raw content (first 500): %r", collected["content"][:500])
+    tool_calls = parse_tool_calls_from_content(collected["content"])
+    if not tool_calls and collected["reasoning_content"]:
+        # 模型有时把调用 JSON 写进思维链而不是正文。
+        tool_calls = parse_tool_calls_from_content(collected["reasoning_content"])
+    if tool_calls or collected["content"]:
+        return collected, tool_calls
+
+    logger.info("empty turn with tools enabled; retrying once with a nudge")
+    nudged = [*messages, {"role": "user", "content": TURN_NUDGE}]
+    collected = collect_genai_response(nudged, model, max_tokens, settings, access_token, image_payload,
+                                       net_go, thinking, chat_group_id)
+    logger.debug("tools path raw content after nudge (first 500): %r", collected["content"][:500])
+    tool_calls = (parse_tool_calls_from_content(collected["content"])
+                  or parse_tool_calls_from_content(collected["reasoning_content"]))
+    return collected, tool_calls
 
 def build_chat_completion_payload(model, content, reasoning_content=None, tool_calls=None, usage_total=None):
     """构建非流式 Chat Completions 响应。
@@ -285,14 +316,8 @@ def chat_completions():
 
         if stream:
             if tools_enabled:
-                collected = collect_genai_response(upstream_messages, model, max_tokens, settings, access_token, image_payload,
-                                                   net_go, thinking, chat_group_id)
-                # 记录原始输出，便于定位"模型只宣布不调用"之类的解析失败。
-                logger.debug("tools path raw content (first 500): %r", collected["content"][:500])
-                tool_calls = parse_tool_calls_from_content(collected["content"])
-                if not tool_calls and collected["reasoning_content"]:
-                    # 模型有时把调用 JSON 写进思维链而不是正文。
-                    tool_calls = parse_tool_calls_from_content(collected["reasoning_content"])
+                collected, tool_calls = collect_tool_turn(upstream_messages, model, max_tokens, settings,
+                                                          access_token, image_payload, net_go, thinking, chat_group_id)
                 # 思维链独占一轮（正文为空）时把思维链当正文透出，避免客户端空白。
                 visible_content = collected["content"] or collected["reasoning_content"]
                 return Response(
@@ -309,14 +334,13 @@ def chat_completions():
             )
 
         # 非流式模式先完整收集，再一次性组装 OpenAI 响应体。
-        collected = collect_genai_response(upstream_messages, model, max_tokens, settings, access_token, image_payload,
-                                           net_go, thinking, chat_group_id)
         if tools_enabled:
-            logger.debug("tools path raw content (first 500): %r", collected["content"][:500])
-        tool_calls = parse_tool_calls_from_content(collected["content"]) if tools_enabled else []
-        if tools_enabled and not tool_calls and collected["reasoning_content"]:
-            # 模型有时把调用 JSON 写进思维链而不是正文。
-            tool_calls = parse_tool_calls_from_content(collected["reasoning_content"])
+            collected, tool_calls = collect_tool_turn(upstream_messages, model, max_tokens, settings,
+                                                      access_token, image_payload, net_go, thinking, chat_group_id)
+        else:
+            collected = collect_genai_response(upstream_messages, model, max_tokens, settings, access_token, image_payload,
+                                               net_go, thinking, chat_group_id)
+            tool_calls = []
         # 思维链独占一轮（正文为空）时把思维链当正文透出，避免客户端空白。
         content = collected["content"]
         reasoning_content = collected["reasoning_content"]
