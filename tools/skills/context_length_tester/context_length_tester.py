@@ -327,13 +327,28 @@ class ContextLengthTester:
 
 
 def main():
+    # 自动读取项目 .env：GENAI_API_KEY（代理鉴权密钥）与 GENAI_API_BASE_URL
+    # （打哪个服务，带不带 /v1 都行）；老的 OPENAI_API_BASE/OPENAI_API_KEY 仍兼容。
+    from genai2openai.config import load_dotenv
+    load_dotenv()
+
+    default_api_base = (os.getenv("GENAI_API_BASE_URL") or os.getenv("OPENAI_API_BASE") or "").rstrip("/")
+    if not default_api_base:
+        default_api_url = "http://localhost:11435/v1/chat/completions"
+    elif default_api_base.endswith("/chat/completions"):
+        default_api_url = default_api_base
+    elif default_api_base.endswith("/v1"):
+        default_api_url = default_api_base + "/chat/completions"
+    else:
+        default_api_url = default_api_base + "/v1/chat/completions"
+
     parser = argparse.ArgumentParser(description="测试 LLM 模型上下文长度")
-    parser.add_argument("--api-url", type=str, 
-                        default=os.getenv("OPENAI_API_BASE", "http://localhost:11435/v1/chat/completions"),
-                        help="API 端点地址")
+    parser.add_argument("--api-url", type=str,
+                        default=default_api_url,
+                        help="API 端点地址（默认从 GENAI_API_BASE_URL/OPENAI_API_BASE 推导）")
     parser.add_argument("--api-key", type=str,
-                        default=os.getenv("OPENAI_API_KEY", "sk-test"),
-                        help="API 密钥")
+                        default=os.getenv("GENAI_API_KEY") or os.getenv("OPENAI_API_KEY", "sk-test"),
+                        help="API 密钥（默认从 GENAI_API_KEY/OPENAI_API_KEY 读取）")
     parser.add_argument("--model", type=str, required=True, help="模型名称")
     parser.add_argument("--mode", type=str, choices=["probe", "needle"], default="needle",
                         help="测试模式: probe=二分查找API上限, needle=大海捞针实测")
