@@ -191,6 +191,7 @@ remotePort = 11435
 兼容层同时兼容上游请求名和实际模型名，详见[模型列表](docs/模型列表.md)。
 旧版模型（deepseek-v3/r1、gpt-5.5 等）已于 2026 年 9 月平台升级后全部下线。
 性能数据由 `tools/benchmark_models.py` 实测（约 300 字中文生成任务），更新于 `2026-09-16`。kimi-k3 输出速度低是因为思维链较长，正文生成速度实际更快。
+上下文实测（2026-09-19，大海捞针法）：kimi-k3 稳定至 ~192k tokens（224k 起服务层 500）；deepseek-v4.1 ≥256k 未触顶（网关另有 ~900KB 请求体硬上限，约 29 万中文 token 触墙）；glm-5.3-flash / qwen-3.8 未实测。
 
 ### 测试模型上下文长度
 
@@ -244,7 +245,7 @@ uv run tools/skills/context_length_tester/context_length_tester.py --model kimi-
 - 实测提示：Kimi-K3 思考链长、且偶尔声称"没有工具可用"（幻觉，实际调用已成功），agent 场景更推荐 `deepseek-v4.1`。
 - 当模型输出多个调用时，会按顺序解析为多个 `tool_calls`。
 
-**Kimi-K3 的"自我限制"问题（已定位根因）**：K3 会逐字引用一段英文系统文本——`The system is invoked with tool_choice=none. You MUST NOT call any tools in the next message.` 经对照 [Kimi-K3 官方仓库的 `encoding_k3.py`](https://huggingface.co/moonshotai/Kimi-K3/blob/main/encoding_k3.py)，这是 K3 官方 XTML 编码器在请求不含原生 `tools`/`tool_choice` 字段时自动注入的内部系统消息（`tool_choice` 缺省视为 `none`）。学校推理侧（`rootAiType: xinference`）原样套用了官方编码器，而本项目恰恰靠提示词模拟工具（上游协议没有 tools 字段），于是 K3 每轮都同时收到"禁止调用工具"的模板注入和我们的"工具可用"提示词，听哪边全凭运气——这就是它工具调用时灵时不灵、甚至自称"被限制"的根因。本项目的对策是在提示词中显式声明该段为误报予以覆盖；DeepSeek-V4.1 无此模板注入，agent 场景更稳。
+**Kimi-K3 的"自我限制"问题（已定位根因）**：K3 会逐字引用一段英文系统文本——`The system is invoked with tool_choice=none. You MUST NOT call any tools in the next message.` 经对照 [Kimi-K3 官方仓库的 `encoding_k3.py`](https://huggingface.co/moonshotai/Kimi-K3/blob/main/encoding_k3.py)，这是 K3 官方 XTML 编码器在请求不含原生 `tools`/`tool_choice` 字段时自动注入的内部系统消息（`tool_choice` 缺省视为 `none`）。学校推理侧（`rootAiType: xinference`）原样套用了官方编码器，而本项目恰恰靠提示词模拟工具（上游协议没有 tools 字段），于是 K3 每轮都同时收到"禁止调用工具"的模板注入和我们的"工具可用"提示词，听哪边全凭运气——这就是它工具调用时灵时不灵、甚至自称"被限制"的根因。本项目的对策是在提示词中显式声明该段为误报予以覆盖；DeepSeek-V4.1 无此模板注入，agent 场景更稳。（另已实测：向上游请求体直接附加 `tools`/`tool_choice` 字段无效——后端会丢弃未知字段，原生工具通道不存在。）
 
 ### 接入 opencode
 
@@ -265,11 +266,11 @@ opencode 对自定义 provider 的模型默认不启用工具调用，需要在�
         "headers": { "X-GenAI-Chat-Group": "opencode" }
       },
       "models": {
-        "kimi-k3":                { "name": "Kimi K3",             "tool_call": true, "reasoning": true, "limit": { "context": 131072, "output": 16384 } },
-        "kimi-k3-search":         { "name": "Kimi K3 (联网)",      "tool_call": true, "reasoning": true, "limit": { "context": 131072, "output": 16384 } },
-        "deepseek-v4.1":          { "name": "DeepSeek V4.1",       "tool_call": true, "limit": { "context": 131072, "output": 16384 } },
-        "deepseek-v4.1-search":   { "name": "DeepSeek V4.1 (联网)","tool_call": true, "limit": { "context": 131072, "output": 16384 } },
-        "deepseek-v4.1-thinking": { "name": "DeepSeek V4.1 (深思)","tool_call": true, "reasoning": true, "limit": { "context": 131072, "output": 16384 } },
+        "kimi-k3":                { "name": "Kimi K3",             "tool_call": true, "reasoning": true, "limit": { "context": 192000, "output": 16384 } },
+        "kimi-k3-search":         { "name": "Kimi K3 (联网)",      "tool_call": true, "reasoning": true, "limit": { "context": 192000, "output": 16384 } },
+        "deepseek-v4.1":          { "name": "DeepSeek V4.1",       "tool_call": true, "limit": { "context": 262144, "output": 16384 } },
+        "deepseek-v4.1-search":   { "name": "DeepSeek V4.1 (联网)","tool_call": true, "limit": { "context": 262144, "output": 16384 } },
+        "deepseek-v4.1-thinking": { "name": "DeepSeek V4.1 (深思)","tool_call": true, "reasoning": true, "limit": { "context": 262144, "output": 16384 } },
         "glm-5.3-flash":          { "name": "GLM 5.3 Flash",       "tool_call": true, "limit": { "context": 131072, "output": 16384 } },
         "glm-5.3-flash-search":   { "name": "GLM 5.3 Flash (联网)","tool_call": true, "limit": { "context": 131072, "output": 16384 } },
         "qwen-3.8":               { "name": "Qwen 3.8",            "tool_call": true, "limit": { "context": 131072, "output": 16384 } },
@@ -290,7 +291,7 @@ opencode 对自定义 provider 的模型默认不启用工具调用，需要在�
 - `baseURL` 必须是 `http://`（本服务不跑 TLS），末尾带 `/v1`。
 - 服务以 `--account` / `.env` 账号模式启动时 `apiKey` 可任意填；服务端设置了 `GENAI_API_KEY`（鉴权模式）时，`apiKey` 必须填同一个密钥。
 - 模型后缀 `-search` / `-thinking` / `-nothink` 直接当独立模型配；`reasoning: true` 让 opencode 把思维链渲染成思考块。
-- `limit.context` 是估算值（自定义模型没有元数据），实测后可用 `tools/skills/context_length_tester` 校准。
+- `limit.context`：K3 为 192k（224k 起服务层出现 500）、DeepSeek-V4.1 为 256k（2026-09-19 大海捞针实测；glm/qwen 未测，先用保守值 131072）。另注意网关有约 900KB 的请求体硬上限。
 - 模型选择建议：agent 任务主力 `deepseek-v4.1`（快、不话痨）；重推理用 `kimi-k3`（强制思考，慢但深）；GPT 系有 100 万 tokens/月额度，留给本地模型解决不了的硬任务。
 
 ### 图片输入
