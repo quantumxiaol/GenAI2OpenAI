@@ -45,6 +45,8 @@ def parse_args():
     parser.add_argument("--chat-group-id", default=None, help="send a fixed chatGroupId")
     parser.add_argument("--image", default=None, help="attach an image (local path / URL / data URL), uploaded via the GenAI image service")
     parser.add_argument("--image-urls-array", action="store_true", help="put the image into imageUrls[] instead of imageUrl/width/height")
+    parser.add_argument("--native-tools", action="store_true",
+                        help="include OpenAI-style tools/tool_choice fields (test whether the backend passes native tool calling through)")
     return parser.parse_args()
 
 
@@ -81,6 +83,17 @@ def main():
         payload["thinking"] = False
     if args.chat_group_id:
         payload["chatGroupId"] = args.chat_group_id
+    if args.native_tools:
+        # 上游协议里本没有这两个字段；测试 Java 后端是否透传给推理层。
+        payload["tools"] = [{
+            "type": "function",
+            "function": {
+                "name": "get_weather",
+                "description": "查询城市天气",
+                "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]},
+            },
+        }]
+        payload["tool_choice"] = "auto"
     if args.image:
         from genai2openai.images import (
             fetch_image_bytes,
