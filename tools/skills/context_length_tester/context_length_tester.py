@@ -149,7 +149,9 @@ class ContextLengthTester:
                 best = mid
                 low = mid + 1
                 print(f"✓ {mid} tokens OK")
-            elif "context" in resp.text.lower() or resp.status_code in [400, 413, 414]:
+            elif ("context" in resp.text.lower() or "size must be" in resp.text.lower()
+                  or resp.status_code in [400, 413, 414]):
+                # "size must be between 0 and N" 是网关的请求体字节上限，同样视为超限。
                 print(f"✗ {mid} tokens EXCEEDED: {resp.status_code}")
                 high = mid - 1
             else:
