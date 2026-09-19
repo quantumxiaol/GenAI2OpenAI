@@ -244,6 +244,8 @@ uv run tools/skills/context_length_tester/context_length_tester.py --model kimi-
 - 实测提示：Kimi-K3 思考链长、且偶尔声称"没有工具可用"（幻觉，实际调用已成功），agent 场景更推荐 `deepseek-v4.1`。
 - 当模型输出多个调用时，会按顺序解析为多个 `tool_calls`。
 
+**Kimi-K3 的"自我限制"问题（已定位根因）**：K3 会逐字引用一段英文系统文本——`The system is invoked with tool_choice=none. You MUST NOT call any tools in the next message.` 经对照 [Kimi-K3 官方仓库的 `encoding_k3.py`](https://huggingface.co/moonshotai/Kimi-K3/blob/main/encoding_k3.py)，这是 K3 官方 XTML 编码器在请求不含原生 `tools`/`tool_choice` 字段时自动注入的内部系统消息（`tool_choice` 缺省视为 `none`）。学校推理侧（`rootAiType: xinference`）原样套用了官方编码器，而本项目恰恰靠提示词模拟工具（上游协议没有 tools 字段），于是 K3 每轮都同时收到"禁止调用工具"的模板注入和我们的"工具可用"提示词，听哪边全凭运气——这就是它工具调用时灵时不灵、甚至自称"被限制"的根因。本项目的对策是在提示词中显式声明该段为误报予以覆盖；DeepSeek-V4.1 无此模板注入，agent 场景更稳。
+
 ### 接入 opencode
 
 opencode 对自定义 provider 的模型默认不启用工具调用，需要在模型配置里显式声明 `tool_call: true`（配置位置：项目根目录 `opencode.json`，或全局 `~/.config/opencode/opencode.json`）。
