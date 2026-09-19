@@ -290,8 +290,13 @@ def chat_completions():
                 # 记录原始输出，便于定位"模型只宣布不调用"之类的解析失败。
                 logger.debug("tools path raw content (first 500): %r", collected["content"][:500])
                 tool_calls = parse_tool_calls_from_content(collected["content"])
+                if not tool_calls and collected["reasoning_content"]:
+                    # 模型有时把调用 JSON 写进思维链而不是正文。
+                    tool_calls = parse_tool_calls_from_content(collected["reasoning_content"])
+                # 思维链独占一轮（正文为空）时把思维链当正文透出，避免客户端空白。
+                visible_content = collected["content"] or collected["reasoning_content"]
                 return Response(
-                    stream_with_context(stream_tool_calls_response(model, collected["content"], tool_calls)),
+                    stream_with_context(stream_tool_calls_response(model, visible_content, tool_calls)),
                     mimetype='text/event-stream',
                     headers=SSE_HEADERS,
                 )
@@ -309,10 +314,18 @@ def chat_completions():
         if tools_enabled:
             logger.debug("tools path raw content (first 500): %r", collected["content"][:500])
         tool_calls = parse_tool_calls_from_content(collected["content"]) if tools_enabled else []
+        if tools_enabled and not tool_calls and collected["reasoning_content"]:
+            # 模型有时把调用 JSON 写进思维链而不是正文。
+            tool_calls = parse_tool_calls_from_content(collected["reasoning_content"])
+        # 思维链独占一轮（正文为空）时把思维链当正文透出，避免客户端空白。
+        content = collected["content"]
+        reasoning_content = collected["reasoning_content"]
+        if not content and reasoning_content:
+            content, reasoning_content = reasoning_content, None
         response = build_chat_completion_payload(
             model,
-            collected["content"],
-            collected["reasoning_content"],
+            content,
+            reasoning_content,
             tool_calls,
             collected["usage_total"],
         )
