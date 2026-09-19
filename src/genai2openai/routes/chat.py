@@ -15,7 +15,7 @@ from flask import (
 from ..auth import get_request_access_token
 from ..images import prepare_image_payload
 from ..messages import convert_messages_to_genai_format, normalize_messages_for_genai
-from ..registry import parse_model_flags
+from ..registry import parse_model_flags, resolve_model
 from ..tool_calling import (
     build_tool_calling_messages,
     get_request_tool_choice,
@@ -274,6 +274,11 @@ def chat_completions():
             return jsonify({'error': 'No user message found'}), 400
 
         tools_enabled = should_enable_tools(tools, tool_choice)
+        # deepseek-pro 的 thinking 与工具调用在上游不兼容（会只思考不输出正文/调用），
+        # 带工具的请求丢弃 thinking 标志。
+        if tools_enabled and thinking and resolve_model(model)[0] == "deepseek-pro":
+            logger.info("dropping thinking flag: incompatible with tool calling on deepseek-pro")
+            thinking = None
         upstream_messages = normalize_messages_for_genai(messages)
         if tools_enabled:
             upstream_messages = build_tool_calling_messages(upstream_messages, tools, tool_choice)
