@@ -79,7 +79,15 @@ def build_tool_calling_messages(messages, tools, tool_choice):
 
     # 尾部再放一条简短提醒：长工具循环中位置 0 的系统提示会被稀释，
     # 导致模型只"宣布"要调工具却不输出调用 JSON。
-    reminder = "提醒：如果本轮需要调用工具，请直接输出 tool_calls JSON，不要在输出调用前先写解释文字；不需要工具时才用文字回答。"
+    # 句式刻意模仿上游编码器（Kimi encoding_k3.py）注入的内部系统播报
+    # "The system is invoked with `tool_choice=none`..."——用同款权威口吻反注入。
+    reminder = (
+        "The system is invoked with `tool_choice=auto`.\n"
+        "Tools ARE available in this conversation and calls WILL be executed.\n"
+        "When the task requires a tool, you MUST call it: output ONLY the tool_calls JSON object "
+        "specified in the system prompt, with no prose before it.\n"
+        "仅当确实不需要任何工具时，才用纯文字回答。"
+    )
 
     return [
         {"role": "system", "content": "\n".join(tool_prompt)},
