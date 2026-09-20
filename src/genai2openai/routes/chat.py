@@ -45,7 +45,7 @@ def collect_tool_turn(messages, model, max_tokens, settings, access_token, image
     """
     collected = collect_genai_response(messages, model, max_tokens, settings, access_token, image_payload,
                                        net_go, thinking, chat_group_id)
-    logger.debug("tools path raw content (first 500): %r", collected["content"][:500])
+    logger.debug("tools path raw content (first 500): %r", collected["content"][:4000])
     tool_calls = parse_tool_calls_from_content(collected["content"])
     if not tool_calls and collected["reasoning_content"]:
         # 模型有时把调用 JSON 写进思维链而不是正文。
@@ -57,7 +57,7 @@ def collect_tool_turn(messages, model, max_tokens, settings, access_token, image
     nudged = [*messages, {"role": "user", "content": TURN_NUDGE}]
     collected = collect_genai_response(nudged, model, max_tokens, settings, access_token, image_payload,
                                        net_go, thinking, chat_group_id)
-    logger.debug("tools path raw content after nudge (first 500): %r", collected["content"][:500])
+    logger.debug("tools path raw content after nudge (first 500): %r", collected["content"][:4000])
     tool_calls = (parse_tool_calls_from_content(collected["content"])
                   or parse_tool_calls_from_content(collected["reasoning_content"]))
     return collected, tool_calls

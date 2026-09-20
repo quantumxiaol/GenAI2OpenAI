@@ -110,13 +110,27 @@ def strip_json_code_fence(text):
     return stripped
 
 
+def _loads_lenient(text):
+    """宽容版 json.loads：先严格解析，失败后去掉尾随逗号（`...,}`/`...,]`）再试一次。
+
+    模型输出"看起来合法"的 JSON 时最常见的瑕疵就是尾随逗号。
+    """
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        cleaned = re.sub(r",\s*([}\]])", r"\1", text)
+        try:
+            return json.loads(cleaned)
+        except json.JSONDecodeError:
+            return None
+
+
 def extract_json_object(text):
     """从文本中提取第一个完整 JSON 对象。"""
     stripped = strip_json_code_fence(text)
-    try:
-        return json.loads(stripped)
-    except json.JSONDecodeError:
-        pass
+    parsed = _loads_lenient(stripped)
+    if parsed is not None:
+        return parsed
 
     start = stripped.find("{")
     if start == -1:
@@ -143,10 +157,7 @@ def extract_json_object(text):
         elif char == "}":
             depth -= 1
             if depth == 0:
-                try:
-                    return json.loads(stripped[start:index + 1])
-                except json.JSONDecodeError:
-                    return None
+                return _loads_lenient(stripped[start:index + 1])
     return None
 
 
