@@ -294,6 +294,9 @@ opencode 对自定义 provider 的模型默认不启用工具调用，需要在�
 - `limit.context`：K3 为 192k（224k 起服务层出现 500）、DeepSeek-V4.1 为 256k（2026-09-19 大海捞针实测；glm/qwen 未测，先用保守值 131072）。另注意网关有约 900KB 的请求体硬上限。
 - 模型选择建议：agent 任务主力 `deepseek-v4.1`（快、不话痨）；重推理用 `kimi-k3`（强制思考，慢但深）；GPT 系有 100 万 tokens/月额度，留给本地模型解决不了的硬任务。
 
+![图片说明](images/opencode.png)
+
+
 ### 图片输入
 
 `/v1/chat/completions` 支持 OpenAI 常见多模态消息格式：
