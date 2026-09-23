@@ -107,9 +107,18 @@ def main():
 
     app = create_app(settings)
     log_new_remote_models(settings)
-    # threaded=True：每个请求独立线程。SSE 流式是 I/O 密集（等上游时 GIL 已释放），
-    # 几个人并发互不阻塞；不开启时 Werkzeug 默认单线程串行。
-    app.run(host=settings.host, port=settings.port, debug=False, threaded=True)
+
+    # 生产级 WSGI 服务器（waitress，线程池 16：SSE 长连接是 I/O 密集，几个人并发互不阻塞）；
+    # 兜底回退 Werkzeug（ threaded=True）。
+    try:
+        from waitress import serve
+
+        logging.getLogger("genai-proxy").info(
+            "Serving via waitress on http://%s:%s (threads=16)", settings.host, settings.port
+        )
+        serve(app, host=settings.host, port=settings.port, threads=16)
+    except ImportError:
+        app.run(host=settings.host, port=settings.port, debug=False, threaded=True)
 
 
 if __name__ == '__main__':
