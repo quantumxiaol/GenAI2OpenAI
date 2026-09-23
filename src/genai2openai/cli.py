@@ -107,7 +107,9 @@ def main():
 
     app = create_app(settings)
     log_new_remote_models(settings)
-    app.run(host=settings.host, port=settings.port, debug=False)
+    # threaded=True：每个请求独立线程。SSE 流式是 I/O 密集（等上游时 GIL 已释放），
+    # 几个人并发互不阻塞；不开启时 Werkzeug 默认单线程串行。
+    app.run(host=settings.host, port=settings.port, debug=False, threaded=True)
 
 
 if __name__ == '__main__':
