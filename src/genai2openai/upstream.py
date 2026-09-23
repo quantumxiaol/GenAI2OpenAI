@@ -3,7 +3,7 @@ import logging
 
 import requests
 
-from .config import GENAI_URL, Settings, build_genai_headers
+from .config import GATEWAY_PAYLOAD_LIMIT, GENAI_URL, Settings, build_genai_headers
 from .messages import split_chat_info
 from .registry import resolve_model
 
@@ -96,6 +96,18 @@ def stream_genai_events(messages, model, max_tokens, settings: Settings, access_
         logger.debug("chatGroupId skipped for image request (upstream incompatible)")
     if image_payload:
         genai_data.update(image_payload)
+
+    # 网关请求体硬上限约 900KB：估算超限在上游白跑一趟之前直接报错。
+    payload_bytes = len(json.dumps(genai_data, ensure_ascii=False).encode("utf-8"))
+    if payload_bytes > GATEWAY_PAYLOAD_LIMIT:
+        logger.warning("request payload %d bytes exceeds gateway limit %d, rejecting early",
+                       payload_bytes, GATEWAY_PAYLOAD_LIMIT)
+        yield {
+            "type": "error",
+            "error": f"Request too large: ~{payload_bytes} bytes exceeds the upstream gateway limit "
+                     f"(~{GATEWAY_PAYLOAD_LIMIT} bytes). Shorten the conversation history or trim file contents.",
+        }
+        return
 
     logger.debug(
         "Upstream request prepared: model=%s rootAiType=%s stream=%s maxToken=%s has_image=%s message_count=%s",

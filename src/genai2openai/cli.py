@@ -60,6 +60,14 @@ def resolve_port(cli_port):
     return DEFAULT_PORT
 
 
+def env_flag(name, default=False):
+    """解析布尔型环境变量（1/true/yes/on 为真，缺省用 default）。"""
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in ("1", "true", "yes", "on")
+
+
 def main():
     load_dotenv()
     apply_proxy_policy()
@@ -73,6 +81,7 @@ def main():
         log_level=args.log_level,
         chat_group_id=args.chat_group_id or os.environ.get("GENAI_CHAT_GROUP_ID"),
         api_key=args.api_key or os.environ.get("GENAI_API_KEY"),
+        disable_azure=env_flag("GENAI_DISABLE_AZURE", False),
     )
     setup_logging(settings.log_level)
 

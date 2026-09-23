@@ -1,6 +1,7 @@
-from flask import Blueprint, jsonify
+from flask import Blueprint, current_app, jsonify
 
 from ..registry import MODEL_SPECS
+from . import SETTINGS_CONFIG_KEY
 
 meta_bp = Blueprint("meta", __name__)
 
@@ -12,8 +13,12 @@ def list_models():
     Returns:
         Response: OpenAI `/v1/models` 兼容 JSON 响应。
     """
+    settings = current_app.config[SETTINGS_CONFIG_KEY]
     models = []
     for spec in MODEL_SPECS:
+        # GENAI_DISABLE_AZURE 模式下不列出 Azure/GPT 模型。
+        if settings.disable_azure and spec["root_ai_type"] == "azure":
+            continue
         models.append({
             "id": spec["public_id"],
             "object": "model",

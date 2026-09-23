@@ -273,6 +273,10 @@ def chat_completions():
         messages = req_data.get('messages', [])
         # 模型名可带功能后缀（-search/-thinking/-nothink），显式字段 net_go/thinking 优先。
         model, model_flags = parse_model_flags(req_data.get('model', 'kimi-k3'))
+        # GENAI_DISABLE_AZURE 模式下拒绝 Azure/GPT 模型，避免误用额度。
+        if settings.disable_azure and resolve_model(model)[1] == "azure":
+            return jsonify({'error': f"Azure/GPT models are disabled on this server (GENAI_DISABLE_AZURE). "
+                                     f"Use a local model instead (kimi-k3 / deepseek-v4.1 / glm-5.3-flash / qwen-3.8)."}), 400
         net_go = req_data.get('net_go', model_flags.get('net_go', False))
         thinking = req_data.get('thinking', model_flags.get('thinking'))
         # 请求级会话归组（None=跟随启动配置，空字符串=显式关闭本次归组）。

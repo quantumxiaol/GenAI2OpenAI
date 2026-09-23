@@ -100,8 +100,15 @@ class Settings:
     # 固定上游会话分组 ID：所有 API 请求归入网页版同一条会话；
     # 为空则不发送，每次请求在网页版各自建一条会话。
     chat_group_id: str | None = None
-    # 代理自身的 API 鉴权密钥；设置后 /v1/* 需要 `Authorization: Bearer <key>`。
+# 代理自身的 API 鉴权密钥；设置后 /v1/* 需要 `Authorization: Bearer <key>`。
     api_key: str | None = None
+    # 禁用 GPT/Azure 路由模型（GENAI_DISABLE_AZURE=1 启用）：
+    # /v1/models 不再列出，相关请求直接报错，避免误用 Azure 额度。
+    disable_azure: bool = False
+
+
+# 网关请求体硬上限约 900KB；估算超限在上游白跑一趟之前直接报错。
+GATEWAY_PAYLOAD_LIMIT = 880_000
 
 
 def build_genai_headers(settings: Settings, access_token: str | None = None) -> dict:
