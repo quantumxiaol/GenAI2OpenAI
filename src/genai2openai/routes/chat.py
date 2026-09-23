@@ -247,9 +247,10 @@ def stream_tool_calls_response(model, content, tool_calls):
 
 
 SSE_HEADERS = {
+    # waitress 按 PEP 3333 禁止逐跳头（Connection/Keep-Alive/Transfer-Encoding），
+    # 不得出现在这里；Content-Type 由 Response 的 mimetype 设置。
     'Cache-Control': 'no-cache',
-    'Connection': 'keep-alive',
-    'Content-Type': 'text/event-stream',
+    'X-Accel-Buffering': 'no',
 }
 
 

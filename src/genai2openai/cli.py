@@ -60,6 +60,17 @@ def resolve_port(cli_port):
     return DEFAULT_PORT
 
 
+def resolve_threads():
+    """waitress 线程池大小：GENAI_THREADS 环境变量 > 默认 16。"""
+    env_threads = os.environ.get("GENAI_THREADS")
+    if env_threads:
+        try:
+            return max(1, int(env_threads))
+        except ValueError:
+            raise SystemExit(f"GENAI_THREADS must be an integer, got {env_threads!r}")
+    return 16
+
+
 def env_flag(name, default=False):
     """解析布尔型环境变量（1/true/yes/on 为真，缺省用 default）。"""
     value = os.environ.get(name)
@@ -108,15 +119,16 @@ def main():
     app = create_app(settings)
     log_new_remote_models(settings)
 
-    # 生产级 WSGI 服务器（waitress，线程池 16：SSE 长连接是 I/O 密集，几个人并发互不阻塞）；
-    # 兜底回退 Werkzeug（ threaded=True）。
+    # 生产级 WSGI 服务器（waitress，线程池默认 16，SSE 长连接是 I/O 密集，
+    # 几个人并发互不阻塞）；兜底回退 Werkzeug（threaded=True）。
+    threads = resolve_threads()
     try:
         from waitress import serve
 
         logging.getLogger("genai-proxy").info(
-            "Serving via waitress on http://%s:%s (threads=16)", settings.host, settings.port
+            "Serving via waitress on http://%s:%s (threads=%s)", settings.host, settings.port, threads
         )
-        serve(app, host=settings.host, port=settings.port, threads=16)
+        serve(app, host=settings.host, port=settings.port, threads=threads)
     except ImportError:
         app.run(host=settings.host, port=settings.port, debug=False, threaded=True)
 

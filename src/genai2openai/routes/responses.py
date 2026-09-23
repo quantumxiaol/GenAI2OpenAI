@@ -159,9 +159,10 @@ def stream_responses_api(messages, model, max_tokens, settings, access_token=Non
 
 
 SSE_HEADERS = {
+    # waitress 按 PEP 3333 禁止逐跳头（Connection/Keep-Alive/Transfer-Encoding），
+    # 不得出现在这里；Content-Type 由 Response 的 mimetype 设置。
     'Cache-Control': 'no-cache',
-    'Connection': 'keep-alive',
-    'Content-Type': 'text/event-stream',
+    'X-Accel-Buffering': 'no',
 }
 
 
