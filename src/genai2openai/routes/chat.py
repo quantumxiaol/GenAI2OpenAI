@@ -60,6 +60,9 @@ def collect_tool_turn(messages, model, max_tokens, settings, access_token, image
     logger.debug("tools path raw content after nudge (first 500): %r", collected["content"][:4000])
     tool_calls = (parse_tool_calls_from_content(collected["content"])
                   or parse_tool_calls_from_content(collected["reasoning_content"]))
+    if not tool_calls and not collected["content"] and not collected["reasoning_content"]:
+        # 重试后仍为空（上游空轮爆发期）：给出明确提示而不是让客户端白屏。
+        collected["content"] = "[上游本轮返回了空响应（平台可能正忙），请重试]"
     return collected, tool_calls
 
 def build_chat_completion_payload(model, content, reasoning_content=None, tool_calls=None, usage_total=None):

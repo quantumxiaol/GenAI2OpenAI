@@ -32,7 +32,8 @@ def build_history(turns=12):
             {"id": f"call_{i}", "type": "function",
              "function": {"name": "bash", "arguments": json.dumps({"command": "ls"})}}]})
         history.append({"role": "tool", "tool_call_id": f"call_{i}", "content": "file1.py file2.py README.md"})
-    history.append({"role": "user", "content": "现在再列一次当前目录文件，用工具"})
+    # 最后一条提一个历史里"没有答案"的新命令：模型无法用记忆回答，必须发起调用。
+    history.append({"role": "user", "content": "用 bash 运行 git log --oneline -1，把最新提交信息告诉我"})
     return history
 
 
@@ -48,19 +49,29 @@ def main():
     models = [args.model] if args.model else ["kimi-k3", "kimi-k3-thinking"]
     headers = {"Authorization": f"Bearer {args.api_key}"} if args.api_key else {}
     history = build_history(args.turns)
-    url = f"{args.base_url.rstrip('/')}/v1/chat/completions"
+    base = args.base_url.rstrip("/")
+    if base.endswith("/v1"):
+        base = base[:-3]
+    url = f"{base}/v1/chat/completions"
 
     for model in models:
         ok = 0
+        memory_answer = 0
+        empty = 0
         for i in range(args.runs):
             resp = requests.post(url, headers=headers, timeout=300, json={
                 "model": model, "max_tokens": 1024, "messages": history, "tools": [TOOL]})
             message = resp.json().get("choices", [{}])[0].get("message", {})
             called = bool(message.get("tool_calls"))
-            ok += called
-            content = (message.get("content") or "")[:60].replace("\n", "\\n")
-            print(f"{model} run{i + 1}: tool_call={called} content={content!r}")
-        print(f"=> {model}: {ok}/{args.runs} 发起了工具调用\n")
+            content = message.get("content") or ""
+            if called:
+                ok += 1
+            elif content:
+                memory_answer += 1  # 用文字直接回答了（未调用），单独计数
+            else:
+                empty += 1  # 完全空轮（异常）
+            print(f"{model} run{i + 1}: tool_call={called} content={content[:60].replace(chr(10), chr(92) + 'n')!r}")
+        print(f"=> {model}: 发起调用 {ok}/{args.runs}，文字作答 {memory_answer}，空轮 {empty}\n")
 
 
 if __name__ == "__main__":
