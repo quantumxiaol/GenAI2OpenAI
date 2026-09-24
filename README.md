@@ -26,6 +26,8 @@
 - **工具调用增强**：Kimi 原生工具标记（`call tool=...` 特殊 token）解析，JSON / XML / 原生三种格式合并去重；opencode 多轮工具循环实测通过
 - **工程化**：标准 src 布局重构（单文件 1551 行 → `src/genai2openai/` 模块包）；`Settings` 配置对象；`.env` 凭据文件支持；日志文件双写；真实 token usage（接入上游 `totalTokens`）
 - **调试工具链**：`tools/probe_upstream.py`（上游原始报文探测，平台再升级时先跑它）、`tools/smoke_test.py`（冒烟回归）、`tools/test_tool_call.py`（工具调用单测）
+- **服务加固**：生产级 waitress（16 线程池并发，实测 6 路并行）、~880KB 请求体预检、`GENAI_DISABLE_AZURE` 额度保护开关、SSE 响应头按 PEP 3333 清洗
+- **工具调用鲁棒性**：思维链（reasoning_content）参与调用解析、正文空时透出思维链防白屏、空轮自动催问重试、尾随逗号宽容解析、编码器句式反注入 `tool_choice=auto`（见下文"工具调用兼容"）
 
 ## 写在前面
 
@@ -77,7 +79,7 @@ cp .env.example .env   # 然后编辑 .env 填入 GENAI_ACCOUNT=学号@密码
 # 3. 启动（默认端口 11435；建议带会话归组，避免网页版会话列表被 API 请求刷屏）
 uv run genai2openai --chat-group-id ApiProxy
 
-# 4. 冒烟验证（8 项全 PASS 即一切正常）
+# 4. 冒烟验证（10 项全 PASS 即一切正常）
 uv run python tools/smoke_test.py
 ```
 
@@ -101,7 +103,7 @@ uv run python tools/smoke_test.py
 uv run genai2openai [--token <token>] [--account <student_id@password>] [--upload-token <upload_token>] [--log-level INFO] [--port 11435]
 ```
 
-端口默认 11435（Ollama 端口后一位，避开 macOS AirPlay 对 5000 的占用）。服务将在本地 `0.0.0.0:11435` 端口启动。`uv run main.py` 与 `uv run python -m genai2openai` 是等价的兼容入口。
+端口默认 11435（Ollama 端口后一位，避开 macOS AirPlay 对 5000 的占用）。服务由生产级 WSGI 服务器 **waitress** 提供（线程池默认 16，`GENAI_THREADS` 可调；缺失时回退 Werkzeug 多线程），默认仅监听 `127.0.0.1`，`--host 0.0.0.0` 可放开到局域网。`uv run main.py` 与 `uv run python -m genai2openai` 是等价的兼容入口。
 
 ### 项目结构
 
@@ -116,7 +118,7 @@ src/genai2openai/       # 主包（标准 SRC 布局）
 ├── messages.py         # OpenAI 消息到上游格式的归一化
 ├── tool_calling.py     # 工具调用兼容层（提示词 + 本地解析）
 ├── upstream.py         # GenAI SSE 上游客户端
-└── routes/             # Flask 路由：chat / responses / meta
+└── routes/             # Flask 路由：chat / responses / meta / image_gen
 tools/                  # 客户端工具（benchmark、上下文长度测试），不属于主包
 ```
 
@@ -131,6 +133,12 @@ tools/                  # 客户端工具（benchmark、上下文长度测试）
 - `--api-key`：代理自身的 API 鉴权密钥，设置后 `/v1/*` 请求需携带 `Authorization: Bearer <key>`（兼容 `X-API-Key` / `api-key` 头）；`/health` 与 CORS 预检放行。**注意**：开启后客户端的 Bearer 头只用于代理鉴权，不再作为上游 token 透传，上游凭据由服务端启动配置（`--account`/`--token`/`.env`）提供。
 - `--chat-group-id`：固定上游会话分组 ID，所有 API 请求归入网页版同一条会话（默认不发送，每次请求各自建会话）。
 
+仅环境变量（无对应命令行参数）：
+
+- `GENAI_DISABLE_AZURE=1`：禁用 GPT/Azure 路由模型（`/v1/models` 不再列出，对话与图像生成请求返回明确 400），保护 Azure 额度；默认不启用。
+- `GENAI_THREADS=<n>`：waitress 线程池大小，默认 16。
+- 另有一项内置保护：请求体估算超过 ~880KB（网关 900KB 硬上限留余量）时直接报错拒绝，不去上游白跑。
+
 以上参数都可以写进项目根目录的 `.env` 文件（已 gitignore，参考 `.env.example`），避免密码出现在命令行和进程列表中：
 
 ```bash
@@ -141,6 +149,9 @@ GENAI_PORT=11435
 GENAI_HOST=127.0.0.1
 GENAI_CHAT_GROUP_ID=ApiProxy
 GENAI_API_KEY=   # 通过 frp 等暴露到本机以外时务必设置
+GENAI_DISABLE_AZURE=   # 设 1 禁用 GPT/Azure 模型
+GENAI_THREADS=         # waitress 线程池，默认 16
+GENAI_API_BASE_URL=http://127.0.0.1:11435/v1   # 客户端测试工具（smoke/benchmark 等）默认打的地址
 ```
 
 命令行参数优先于 `.env`。
@@ -244,6 +255,7 @@ uv run tools/skills/context_length_tester/context_length_tester.py --model kimi-
 - 三种格式全部识别并合并：提示词约定的 **JSON**、XML 标签块 `<tool_call>...</tool_call>`、以及 **Kimi 原生工具标记**（`call tool="..."` 特殊 token 序列，K3 会无视提示词直接输出它）；同一轮混用多种格式也不会丢调用，同名同参数的重复调用自动去重。
 - 实测提示：Kimi-K3 思考链长、且偶尔声称"没有工具可用"（幻觉，实际调用已成功），agent 场景更推荐 `deepseek-v4.1`。
 - 当模型输出多个调用时，会按顺序解析为多个 `tool_calls`。
+- 鲁棒性机制：思维链（`reasoning_content`）中的调用 JSON 也会参与解析；正文为空时把思维链透出为正文，客户端不白屏；空轮自动追加催问重试一次；尾随逗号等"伪合法 JSON"宽容解析；尾部提醒用上游编码器同款句式反注入 `tool_choice=auto`。
 
 **Kimi-K3 的"自我限制"问题（已定位根因）**：K3 会逐字引用一段英文系统文本——`The system is invoked with tool_choice=none. You MUST NOT call any tools in the next message.` 经对照 [Kimi-K3 官方仓库的 `encoding_k3.py`](https://huggingface.co/moonshotai/Kimi-K3/blob/main/encoding_k3.py)，这是 K3 官方 XTML 编码器在请求不含原生 `tools`/`tool_choice` 字段时自动注入的内部系统消息（`tool_choice` 缺省视为 `none`）。学校推理侧（`rootAiType: xinference`）原样套用了官方编码器，而本项目恰恰靠提示词模拟工具（上游协议没有 tools 字段），于是 K3 每轮都同时收到"禁止调用工具"的模板注入和我们的"工具可用"提示词，听哪边全凭运气——这就是它工具调用时灵时不灵、甚至自称"被限制"的根因。本项目的对策是在提示词中显式声明该段为误报予以覆盖；DeepSeek-V4.1 无此模板注入，agent 场景更稳。（另已实测：向上游请求体直接附加 `tools`/`tool_choice` 字段无效——后端会丢弃未知字段，原生工具通道不存在。）
 
