@@ -301,6 +301,8 @@ opencode 对自定义 provider 的模型默认不启用工具调用，需要在�
 注意：
 
 - `baseURL` 必须是 `http://`（本服务不跑 TLS），末尾带 `/v1`。
+- 上面这份配置按**默认状态**（未禁用 Azure）覆盖全部模型；若服务端开了 `GENAI_DISABLE_AZURE=1`，删掉 4 个 GPT 条目（否则请求会收到 400），且 `/v1/models` 只剩本地 4 个。
+- `-search` / `-thinking` / `-nothink` 是对任意模型 id 生效的后缀开关，不是独立上游模型，因此不出现在 `/v1/models` 清单里——客户端在配置中显式声明即可。
 - 服务以 `--account` / `.env` 账号模式启动时 `apiKey` 可任意填；服务端设置了 `GENAI_API_KEY`（鉴权模式）时，`apiKey` 必须填同一个密钥。
 - 模型后缀 `-search` / `-thinking` / `-nothink` 直接当独立模型配；`reasoning: true` 让 opencode 把思维链渲染成思考块。
 - `limit.context`：K3 为 192k（224k 起服务层出现 500）、DeepSeek-V4.1 为 256k（2026-09-19 大海捞针实测；glm/qwen 未测，先用保守值 131072）。另注意网关有约 900KB 的请求体硬上限。
