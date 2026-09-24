@@ -17,7 +17,7 @@ MODEL_SPECS = [
     {
         "public_id": "deepseek-v4.1",
         "request_id": "deepseek-pro",
-        "actual_id": "DeepSeek-V4.1",
+        "actual_id": "DeepSeek-V4.1-Flash",
         "root_ai_type": "xinference",
     },
     {
@@ -39,21 +39,15 @@ MODEL_SPECS = [
         "root_ai_type": "azure",
     },
     {
-        "public_id": "gpt-5.6-sol",
-        "request_id": "GPT-5.6-SOL",
-        "actual_id": "GPT-5.6-Sol",
+        "public_id": "gpt-6-sol",
+        "request_id": "GPT-6-Sol",
+        "actual_id": "GPT-6-Sol",
         "root_ai_type": "azure",
     },
     {
-        "public_id": "gpt-5.6-terra",
-        "request_id": "GPT-5.6-Terra",
-        "actual_id": "GPT-5.6-Terra",
-        "root_ai_type": "azure",
-    },
-    {
-        "public_id": "gpt-5.6-luna",
-        "request_id": "GPT-5.6-Luna",
-        "actual_id": "GPT-5.6-Luna",
+        "public_id": "gpt-6-luna",
+        "request_id": "GPT-6-Luna",
+        "actual_id": "GPT-6-Luna",
         "root_ai_type": "azure",
     },
 ]

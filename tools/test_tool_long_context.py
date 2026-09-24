@@ -38,6 +38,8 @@ def build_history(turns=12):
 
 
 def main():
+    from genai2openai.config import load_dotenv
+    load_dotenv()
     parser = argparse.ArgumentParser(description="Long-context tool calling test")
     parser.add_argument("--base-url", default=os.environ.get("GENAI_API_BASE_URL", "http://127.0.0.1:11435"))
     parser.add_argument("--api-key", default=os.environ.get("GENAI_API_KEY"))
@@ -61,7 +63,11 @@ def main():
         for i in range(args.runs):
             resp = requests.post(url, headers=headers, timeout=300, json={
                 "model": model, "max_tokens": 1024, "messages": history, "tools": [TOOL]})
-            message = resp.json().get("choices", [{}])[0].get("message", {})
+            body = resp.json()
+            if "choices" not in body:
+                print(f"{model} run{i + 1}: 请求被拒 HTTP {resp.status_code}: {json.dumps(body, ensure_ascii=False)[:150]}")
+                continue
+            message = body["choices"][0].get("message", {})
             called = bool(message.get("tool_calls"))
             content = message.get("content") or ""
             if called:

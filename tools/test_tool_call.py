@@ -38,6 +38,8 @@ def message_of(data):
 
 
 def main():
+    from genai2openai.config import load_dotenv
+    load_dotenv()
     parser = argparse.ArgumentParser(description="Test tool-calling compatibility through the proxy")
     parser.add_argument("--model", default="deepseek-v4.1")
     parser.add_argument("--base-url", default=os.environ.get("GENAI_API_BASE_URL", "http://127.0.0.1:11435"),

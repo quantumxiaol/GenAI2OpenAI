@@ -64,6 +64,8 @@ def normalize_base_url(value):
 
 
 def main():
+    from genai2openai.config import load_dotenv
+    load_dotenv()
     parser = argparse.ArgumentParser(description="GenAI2OpenAI smoke test")
     parser.add_argument("--base-url", default=os.environ.get("GENAI_API_BASE_URL", "http://127.0.0.1:11435"),
                         help="proxy base URL (with or without /v1; default: GENAI_API_BASE_URL env or local)")
