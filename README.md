@@ -279,6 +279,7 @@ opencode 对自定义 provider 的模型默认不启用工具调用，需要在�
       },
       "models": {
         "kimi-k3":                { "name": "Kimi K3",             "tool_call": true, "reasoning": true, "limit": { "context": 192000, "output": 16384 } },
+        "kimi-k3-thinking":       { "name": "Kimi K3 (深思)",      "tool_call": true, "reasoning": true, "limit": { "context": 192000, "output": 16384 } },
         "kimi-k3-search":         { "name": "Kimi K3 (联网)",      "tool_call": true, "reasoning": true, "limit": { "context": 192000, "output": 16384 } },
         "deepseek-v4.1":          { "name": "DeepSeek V4.1",       "tool_call": true, "limit": { "context": 262144, "output": 16384 } },
         "deepseek-v4.1-search":   { "name": "DeepSeek V4.1 (联网)","tool_call": true, "limit": { "context": 262144, "output": 16384 } },
