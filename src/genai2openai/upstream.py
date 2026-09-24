@@ -43,8 +43,37 @@ def _parse_total_tokens(other):
         return None
 
 
+def _is_token_expired_error(message) -> bool:
+    """判断上游错误是否为 token 过期（可自动重登录重试）。"""
+    text = str(message)
+    return "Token失效" in text or "请重新登录" in text or "GenAI API error: 401" in text
+
+
 def stream_genai_events(messages, model, max_tokens, settings: Settings, access_token=None, image_payload=None,
                         net_go=False, thinking=None, chat_group_id=None):
+    """调用 GenAI 流式接口并产出统一事件流；token 过期时自动 CAS 重登录并重试一次。
+
+    重试只在错误为首个事件时触发（避免重复已流出的增量），且只在使用服务端
+    启动 token 时生效（请求级 token 属于客户端，无法代为刷新）。
+    """
+    saw_events = False
+    token_before = settings.token
+    for event in _stream_genai_events_once(messages, model, max_tokens, settings, access_token, image_payload,
+                                           net_go, thinking, chat_group_id):
+        if (event["type"] == "error" and not saw_events and access_token is None
+                and _is_token_expired_error(event["error"]) and settings.account):
+            from .auth import refresh_token
+            if refresh_token(settings, failed_token=token_before):
+                logger.info("upstream token expired; refreshed via CAS login, retrying request once")
+                yield from _stream_genai_events_once(messages, model, max_tokens, settings, access_token,
+                                                     image_payload, net_go, thinking, chat_group_id)
+                return
+        saw_events = True
+        yield event
+
+
+def _stream_genai_events_once(messages, model, max_tokens, settings: Settings, access_token=None, image_payload=None,
+                              net_go=False, thinking=None, chat_group_id=None):
     """调用 GenAI 流式接口并产出统一事件流。
 
     该函数是整个协议转换的底层入口，负责：

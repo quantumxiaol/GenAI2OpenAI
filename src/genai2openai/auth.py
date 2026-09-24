@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import threading
 
 import requests
 from flask import request
@@ -12,6 +13,40 @@ logger = logging.getLogger("genai-proxy")
 
 # token 缓存文件位于当前工作目录（通常即项目根目录）。
 TOKEN_CACHE_PATH = os.path.join(os.getcwd(), ".genai_token_cache")
+
+# CAS 重登录是慢操作（数秒），串行化避免并发请求同时触发多次登录。
+_refresh_lock = threading.Lock()
+
+
+def refresh_token(settings: Settings, failed_token: str | None = None) -> bool:
+    """用已配置账号重新 CAS 登录刷新服务端 token（线程安全）。
+
+    Args:
+        settings: 运行时配置（需含 account）。
+        failed_token: 本次失败请求所用的 token；若其他线程已抢先刷新则跳过重复登录。
+
+    Returns:
+        bool: 是否拿到可用的新 token。
+    """
+    if not settings.account:
+        return False
+    with _refresh_lock:
+        if failed_token and settings.token and settings.token != failed_token:
+            logger.debug("token already refreshed by another thread")
+            return True
+        try:
+            student_id, password = settings.account.split("@", 1)
+            token = login_genai(student_id, password)
+            settings.token = token
+            save_cached_token(token)
+            logger.info("token refreshed via CAS auto-login")
+            return True
+        except ValueError:
+            logger.error("invalid --account format for token refresh, expected student_id@password")
+            return False
+        except LoginError as exc:
+            logger.error("token refresh failed: %s", exc)
+            return False
 
 
 def load_cached_token():
