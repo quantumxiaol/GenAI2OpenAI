@@ -21,7 +21,7 @@
 原仓库更新止于 2026-05，平台 9 月升级后旧模型全部下线、协议字段变更。本分支完成适配与增强：
 
 - **协议适配**：思维链字段更名兼容（`reasoning_content`）；上游错误包（`{"code":500,"errMsg":...}`）显式透出，不再静默吞掉；`data: [DONE]` 处理；修正 `chatInfo`（本轮提问）与 `messages`（历史）的拆分——旧版会把最后一条用户消息发两遍
-- **模型表更新**：kimi-k3 / deepseek-v4.1 / glm-5.3-flash / qwen-3.8 / gpt-6-astra / gpt-5.6-sol/terra/luna 全量实测（benchmark 8/8 通过），详见[模型列表](docs/模型列表.md)
+- **模型表更新**：kimi-k3 / deepseek-v4.1 / glm-5.3-flash / qwen-3.8 / gpt-6-astra / gpt-6-sol / gpt-6-luna 全量实测（benchmark 8/8 通过），详见[模型列表](docs/模型列表.md)
 - **新能力**：联网搜索（`-search`）与深度思考（`-thinking` / `-nothink`）开关映射；`--chat-group-id` 会话归组，避免 API 请求刷爆网页版会话列表
 - **工具调用增强**：Kimi 原生工具标记（`call tool=...` 特殊 token）解析，JSON / XML / 原生三种格式合并去重；opencode 多轮工具循环实测通过
 - **工程化**：标准 src 布局重构（单文件 1551 行 → `src/genai2openai/` 模块包）；`Settings` 配置对象；`.env` 凭据文件支持；日志文件双写；真实 token usage（接入上游 `totalTokens`）
@@ -195,9 +195,8 @@ remotePort = 11435
 | glm-5.3-flash   | 本地（不限量）         | 未知                   | 0.198s            | 403.89 tokens/s |
 | qwen-3.8        | 本地（不限量）         | 未知                   | 0.214s            | 411.43 tokens/s |
 | gpt-6-astra     | Azure（100万 tokens/月）| 隐藏                  | 8.420s            | 75.30 tokens/s  |
-| gpt-5.6-sol     | Azure（100万 tokens/月）| 隐藏                  | 3.412s            | 122.54 tokens/s |
-| gpt-5.6-terra   | Azure（100万 tokens/月）| 隐藏                  | 4.784s            | 172.85 tokens/s |
-| gpt-5.6-luna    | Azure（100万 tokens/月）| 隐藏                  | 4.100s            | 391.74 tokens/s |
+| gpt-6-sol       | Azure（100万 tokens/月）| 未知                  | 未实测            | 未实测          |
+| gpt-6-luna      | Azure（100万 tokens/月）| 未知                  | 未实测            | 未实测          |
 
 兼容层同时兼容上游请求名和实际模型名，详见[模型列表](docs/模型列表.md)。
 旧版模型（deepseek-v3/r1、gpt-5.5 等）已于 2026 年 9 月平台升级后全部下线。
@@ -289,9 +288,8 @@ opencode 对自定义 provider 的模型默认不启用工具调用，需要在�
         "qwen-3.8":               { "name": "Qwen 3.8",            "tool_call": true, "limit": { "context": 131072, "output": 16384 } },
         "qwen-3.8-search":        { "name": "Qwen 3.8 (联网)",     "tool_call": true, "limit": { "context": 131072, "output": 16384 } },
         "gpt-6-astra":            { "name": "GPT-6 Astra",         "tool_call": true, "limit": { "context": 262144, "output": 16384 } },
-        "gpt-5.6-sol":            { "name": "GPT-5.6 Sol",         "tool_call": true, "limit": { "context": 262144, "output": 16384 } },
-        "gpt-5.6-terra":          { "name": "GPT-5.6 Terra",       "tool_call": true, "limit": { "context": 262144, "output": 16384 } },
-        "gpt-5.6-luna":           { "name": "GPT-5.6 Luna",        "tool_call": true, "limit": { "context": 262144, "output": 16384 } }
+        "gpt-6-sol":              { "name": "GPT-6 Sol",           "tool_call": true, "limit": { "context": 262144, "output": 16384 } },
+        "gpt-6-luna":             { "name": "GPT-6 Luna",          "tool_call": true, "limit": { "context": 262144, "output": 16384 } }
       }
     }
   },
