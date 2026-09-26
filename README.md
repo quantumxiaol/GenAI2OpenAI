@@ -201,7 +201,7 @@ remotePort = 11435
 兼容层同时兼容上游请求名和实际模型名，详见[模型列表](docs/模型列表.md)。
 旧版模型（deepseek-v3/r1、gpt-5.5 等）已于 2026 年 9 月平台升级后全部下线。
 性能数据由 `tools/benchmark_models.py` 实测（约 300 字中文生成任务），更新于 `2026-09-16`。kimi-k3 输出速度低是因为思维链较长，正文生成速度实际更快。
-补充（2026-09-26 实测）：glm-5.3-flash 的 `-thinking` 可正常产出思维链；qwen-3.8 无思考模式，且在 9.11 vs 9.9 比大小上两次答错（四个本地模型中推理最弱，慎用于数学/逻辑任务）。
+补充（2026-09-26 实测）：glm-5.3-flash 的 `-thinking` 可正常产出思维链，且上下文大海捞针全档位通过（≥256k，与 deepseek-v4.1 同档）；qwen-3.8 无思考模式，在 9.11 vs 9.9 比大小上两次答错，且大海捞针在 6.4k 就截断复述密钥（精确复述能力弱，不是上下文长度问题）——qwen 的瓶颈是可靠性而非上下文窗口，慎用。
 上下文实测（2026-09-19，大海捞针法）：kimi-k3 稳定至 ~192k tokens（224k 起服务层 500）；deepseek-v4.1 ≥256k 未触顶（网关另有 ~900KB 请求体硬上限，约 29 万中文 token 触墙）；glm-5.3-flash / qwen-3.8 未实测。
 
 ### 测试模型上下文长度
@@ -284,8 +284,8 @@ opencode 对自定义 provider 的模型默认不启用工具调用，需要在�
         "deepseek-v4.1":          { "name": "DeepSeek V4.1",       "tool_call": true, "limit": { "context": 262144, "output": 16384 } },
         "deepseek-v4.1-search":   { "name": "DeepSeek V4.1 (联网)","tool_call": true, "limit": { "context": 262144, "output": 16384 } },
         "deepseek-v4.1-thinking": { "name": "DeepSeek V4.1 (深思)","tool_call": true, "reasoning": true, "limit": { "context": 262144, "output": 16384 } },
-        "glm-5.3-flash":          { "name": "GLM 5.3 Flash",       "tool_call": true, "limit": { "context": 131072, "output": 16384 } },
-        "glm-5.3-flash-search":   { "name": "GLM 5.3 Flash (联网)","tool_call": true, "limit": { "context": 131072, "output": 16384 } },
+        "glm-5.3-flash":          { "name": "GLM 5.3 Flash",       "tool_call": true, "limit": { "context": 262144, "output": 16384 } },
+        "glm-5.3-flash-search":   { "name": "GLM 5.3 Flash (联网)","tool_call": true, "limit": { "context": 262144, "output": 16384 } },
         "qwen-3.8":               { "name": "Qwen 3.8",            "tool_call": true, "limit": { "context": 131072, "output": 16384 } },
         "qwen-3.8-search":        { "name": "Qwen 3.8 (联网)",     "tool_call": true, "limit": { "context": 131072, "output": 16384 } },
         "gpt-6-astra":            { "name": "GPT-6 Astra",         "tool_call": true, "limit": { "context": 262144, "output": 16384 } },
