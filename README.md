@@ -278,19 +278,19 @@ opencode 对自定义 provider 的模型默认不启用工具调用，需要在�
         "headers": { "X-GenAI-Chat-Group": "opencode" }
       },
       "models": {
-        "kimi-k3":                { "name": "Kimi K3",             "tool_call": true, "reasoning": true, "limit": { "context": 192000, "output": 16384 } },
-        "kimi-k3-thinking":       { "name": "Kimi K3 (深思)",      "tool_call": true, "reasoning": true, "limit": { "context": 192000, "output": 16384 } },
-        "kimi-k3-search":         { "name": "Kimi K3 (联网)",      "tool_call": true, "reasoning": true, "limit": { "context": 192000, "output": 16384 } },
-        "deepseek-v4.1":          { "name": "DeepSeek V4.1",       "tool_call": true, "limit": { "context": 262144, "output": 16384 } },
-        "deepseek-v4.1-search":   { "name": "DeepSeek V4.1 (联网)","tool_call": true, "limit": { "context": 262144, "output": 16384 } },
-        "deepseek-v4.1-thinking": { "name": "DeepSeek V4.1 (深思)","tool_call": true, "reasoning": true, "limit": { "context": 262144, "output": 16384 } },
+        "kimi-k3":                { "name": "Kimi K3",             "tool_call": true, "reasoning": true, "attachment": true, "limit": { "context": 192000, "output": 16384 } },
+        "kimi-k3-thinking":       { "name": "Kimi K3 (深思)",      "tool_call": true, "reasoning": true, "attachment": true, "limit": { "context": 192000, "output": 16384 } },
+        "kimi-k3-search":         { "name": "Kimi K3 (联网)",      "tool_call": true, "reasoning": true, "attachment": true, "limit": { "context": 192000, "output": 16384 } },
+        "deepseek-v4.1":          { "name": "DeepSeek V4.1",       "tool_call": true, "attachment": true, "limit": { "context": 262144, "output": 16384 } },
+        "deepseek-v4.1-search":   { "name": "DeepSeek V4.1 (联网)","tool_call": true, "attachment": true, "limit": { "context": 262144, "output": 16384 } },
+        "deepseek-v4.1-thinking": { "name": "DeepSeek V4.1 (深思)","tool_call": true, "reasoning": true, "attachment": true, "limit": { "context": 262144, "output": 16384 } },
         "glm-5.3-flash":          { "name": "GLM 5.3 Flash",       "tool_call": true, "limit": { "context": 262144, "output": 16384 } },
         "glm-5.3-flash-search":   { "name": "GLM 5.3 Flash (联网)","tool_call": true, "limit": { "context": 262144, "output": 16384 } },
         "qwen-3.8":               { "name": "Qwen 3.8",            "tool_call": true, "limit": { "context": 131072, "output": 16384 } },
         "qwen-3.8-search":        { "name": "Qwen 3.8 (联网)",     "tool_call": true, "limit": { "context": 131072, "output": 16384 } },
-        "gpt-6-astra":            { "name": "GPT-6 Astra",         "tool_call": true, "limit": { "context": 262144, "output": 16384 } },
-        "gpt-6-sol":              { "name": "GPT-6 Sol",           "tool_call": true, "limit": { "context": 262144, "output": 16384 } },
-        "gpt-6-luna":             { "name": "GPT-6 Luna",          "tool_call": true, "limit": { "context": 262144, "output": 16384 } }
+        "gpt-6-astra":            { "name": "GPT-6 Astra",         "tool_call": true, "attachment": true, "limit": { "context": 262144, "output": 16384 } },
+        "gpt-6-sol":              { "name": "GPT-6 Sol",           "tool_call": true, "attachment": true, "limit": { "context": 262144, "output": 16384 } },
+        "gpt-6-luna":             { "name": "GPT-6 Luna",          "tool_call": true, "attachment": true, "limit": { "context": 262144, "output": 16384 } }
       }
     }
   },
@@ -305,6 +305,7 @@ opencode 对自定义 provider 的模型默认不启用工具调用，需要在�
 - `-search` / `-thinking` / `-nothink` 是对任意模型 id 生效的后缀开关，不是独立上游模型，因此不出现在 `/v1/models` 清单里——客户端在配置中显式声明即可。
 - 服务以 `--account` / `.env` 账号模式启动时 `apiKey` 可任意填；服务端设置了 `GENAI_API_KEY`（鉴权模式）时，`apiKey` 必须填同一个密钥。
 - 模型后缀 `-search` / `-thinking` / `-nothink` 直接当独立模型配；`reasoning: true` 让 opencode 把思维链渲染成思考块。
+- `attachment: true` 的模型支持在对话中贴图（本地图以 data URL 上送，代理自动转 GenAI 图片服务）；glm-5.3-flash / qwen-3.8 视觉未实测，未标注。
 - `limit.context`：K3 为 192k（224k 起服务层出现 500）、DeepSeek-V4.1 为 256k（2026-09-19 大海捞针实测；glm/qwen 未测，先用保守值 131072）。另注意网关有约 900KB 的请求体硬上限。
 - 模型选择建议：agent 任务主力 `deepseek-v4.1`（快、不话痨）；重推理用 `kimi-k3`（强制思考，慢但深）；GPT 系有 100 万 tokens/月额度，留给本地模型解决不了的硬任务。
 
