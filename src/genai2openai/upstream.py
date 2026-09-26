@@ -158,7 +158,7 @@ def _stream_genai_events_once(messages, model, max_tokens, settings: Settings, a
             headers=build_genai_headers(settings, access_token),
             json=genai_data,
             stream=True,
-            timeout=60
+            timeout=120
         )
 
         if response.status_code != 200:
