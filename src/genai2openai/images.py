@@ -98,7 +98,13 @@ def upload_image_to_genai(image_bytes, filename, mime_type, settings: Settings, 
 
 
 def parse_image_input_from_message(message):
-    """从单条 OpenAI user message 中提取图片输入（URL 或 data URL）。"""
+    """从单条 OpenAI user message 中提取图片输入（URL 或 data URL）。
+
+    兼容的 part 形态：
+    - `image_url` / `input_image`（OpenAI 标准）
+    - `file`（AI SDK v5：{"type":"file","file":{"data":<base64>,"mediaType":"image/png"}}）
+    - `image`（{"type":"image","image"/"url"/"data": ...}）
+    """
     if not isinstance(message, dict) or message.get("role") != "user":
         return None
 
@@ -110,6 +116,32 @@ def parse_image_input_from_message(message):
         if not isinstance(part, dict):
             continue
         part_type = part.get("type")
+
+        # AI SDK v5 的 file 部分。
+        if part_type == "file" and isinstance(part.get("file"), dict):
+            file_info = part["file"]
+            data = file_info.get("data")
+            media_type = file_info.get("mediaType") or file_info.get("mimeType") or "image/jpeg"
+            if data:
+                if data.startswith("data:"):
+                    return data
+                return f"data:{media_type};base64,{data}"
+            if file_info.get("url"):
+                return file_info["url"]
+
+        # {"type": "image", ...} 变体。
+        if part_type == "image":
+            if isinstance(part.get("image"), str):
+                return part["image"]
+            if isinstance(part.get("url"), str):
+                return part["url"]
+            if isinstance(part.get("data"), str):
+                media_type = part.get("mediaType") or part.get("mimeType") or "image/jpeg"
+                data = part["data"]
+                if data.startswith("data:"):
+                    return data
+                return f"data:{media_type};base64,{data}"
+
         if part_type not in {"image_url", "input_image"}:
             continue
 
@@ -134,7 +166,14 @@ def prepare_image_payload(messages, model, settings: Settings, access_token=None
             break
 
     if not image_input:
-        logger.debug("No image input found in messages")
+        # 顺带记录实际收到的 part 类型，便于定位"客户端发了图但格式不认识"。
+        part_types = [
+            part.get("type")
+            for msg in messages if isinstance(msg, dict) and msg.get("role") == "user"
+            for part in (msg.get("content") if isinstance(msg.get("content"), list) else [])
+            if isinstance(part, dict)
+        ]
+        logger.debug("No image input found in messages (part types seen: %s)", part_types)
         return None
 
     if image_input.startswith("data:"):
