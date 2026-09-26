@@ -50,7 +50,7 @@ def _is_token_expired_error(message) -> bool:
 
 
 def stream_genai_events(messages, model, max_tokens, settings: Settings, access_token=None, image_payload=None,
-                        net_go=False, thinking=None, chat_group_id=None):
+                        net_go=False, thinking=None, chat_group_id=None, chat_info_suffix=None):
     """调用 GenAI 流式接口并产出统一事件流；token 过期时自动 CAS 重登录并重试一次。
 
     重试只在错误为首个事件时触发（避免重复已流出的增量），且只在使用服务端
@@ -59,21 +59,21 @@ def stream_genai_events(messages, model, max_tokens, settings: Settings, access_
     saw_events = False
     token_before = settings.token
     for event in _stream_genai_events_once(messages, model, max_tokens, settings, access_token, image_payload,
-                                           net_go, thinking, chat_group_id):
+                                           net_go, thinking, chat_group_id, chat_info_suffix):
         if (event["type"] == "error" and not saw_events and access_token is None
                 and _is_token_expired_error(event["error"]) and settings.account):
             from .auth import refresh_token
             if refresh_token(settings, failed_token=token_before):
                 logger.info("upstream token expired; refreshed via CAS login, retrying request once")
                 yield from _stream_genai_events_once(messages, model, max_tokens, settings, access_token,
-                                                     image_payload, net_go, thinking, chat_group_id)
+                                                     image_payload, net_go, thinking, chat_group_id, chat_info_suffix)
                 return
         saw_events = True
         yield event
 
 
 def _stream_genai_events_once(messages, model, max_tokens, settings: Settings, access_token=None, image_payload=None,
-                              net_go=False, thinking=None, chat_group_id=None):
+                              net_go=False, thinking=None, chat_group_id=None, chat_info_suffix=None):
     """调用 GenAI 流式接口并产出统一事件流。
 
     该函数是整个协议转换的底层入口，负责：
@@ -101,6 +101,10 @@ def _stream_genai_events_once(messages, model, max_tokens, settings: Settings, a
     # 上游语义为 chatInfo（本轮提问）+ messages（历史消息）拼接，需拆分，
     # 否则模型会看到两遍最后一条用户消息。
     chat_info, history_messages = split_chat_info(messages)
+    if chat_info_suffix:
+        # 短版反注入放到 chatInfo 尾部：这是离生成点最近的可控位置
+        # （再往后只有上游编码器自己注入的 tool-choice 内部消息）。
+        chat_info += chat_info_suffix
     genai_data = {
         "chatInfo": chat_info,
         "messages": history_messages,
@@ -252,7 +256,7 @@ def _stream_genai_events_once(messages, model, max_tokens, settings: Settings, a
 
 
 def collect_genai_response(messages, model, max_tokens, settings: Settings, access_token=None, image_payload=None,
-                           net_go=False, thinking=None, chat_group_id=None):
+                           net_go=False, thinking=None, chat_group_id=None, chat_info_suffix=None):
     """收集完整响应并聚合为非流式结果。
 
     Args:
@@ -277,7 +281,7 @@ def collect_genai_response(messages, model, max_tokens, settings: Settings, acce
     usage_total = None
 
     for event in stream_genai_events(messages, model, max_tokens, settings, access_token, image_payload,
-                                     net_go, thinking, chat_group_id):
+                                     net_go, thinking, chat_group_id, chat_info_suffix):
         if event["type"] == "error":
             raise RuntimeError(event["error"])
         if event["type"] == "delta":

@@ -18,8 +18,10 @@ from ..messages import convert_messages_to_genai_format, normalize_messages_for_
 from ..registry import parse_model_flags, resolve_model
 from ..tool_calling import (
     build_tool_calling_messages,
+    chat_info_suffix,
     get_request_tool_choice,
     get_request_tools,
+    normalize_tool_choice,
     parse_tool_calls_from_content,
     should_enable_tools,
 )
@@ -34,32 +36,58 @@ chat_bp = Blueprint("chat", __name__)
 # 追加这句通常能让它改用约定的 JSON 格式（实测 5/5 救回）。
 TURN_NUDGE = ("（系统提示）你刚才没有给出任何可见回答。如果任务需要工具，请直接输出 tool_calls JSON"
               "（不要先写解释文字）；如果不需要工具，请用文字回答。")
+# tool_choice=required/指定函数 时模型用文字回答（没给 JSON）的催问。
+TURN_NUDGE_REQUIRED = ("（系统提示）你刚才用文字回答了，但本轮 tool_choice=required 要求必须调用工具："
+                       "请只输出 tool_calls JSON，不要输出任何其他文字。")
+
+
+def _retry_with_nudge(messages, nudge, model, max_tokens, settings, access_token, image_payload,
+                      net_go, thinking, chat_group_id, chat_info_suffix):
+    nudged = [*messages, {"role": "user", "content": nudge}]
+    collected = collect_genai_response(nudged, model, max_tokens, settings, access_token, image_payload,
+                                       net_go, thinking, chat_group_id, chat_info_suffix)
+    logger.debug("tools path raw content after nudge (first 500): %r", collected["content"][:4000])
+    tool_calls = (parse_tool_calls_from_content(collected["content"])
+                  or parse_tool_calls_from_content(collected["reasoning_content"]))
+    return collected, tool_calls
 
 
 def collect_tool_turn(messages, model, max_tokens, settings, access_token, image_payload,
-                      net_go, thinking, chat_group_id):
-    """工具路径的上游收集：正文与思维链都参与调用解析；空轮追加催问重试一次。
+                      net_go, thinking, chat_group_id, chat_info_suffix=None, tool_choice=None):
+    """工具路径的上游收集：正文与思维链都参与调用解析。
+
+    三类失败兜底：整轮为空追加催问重试；required 下模型用文字回答（没给 JSON）也催问；
+    重试后仍为空则给出明确提示而不是让客户端白屏。
 
     Returns:
         tuple[dict, list]: (collect_genai_response 聚合结果, 解析出的 tool_calls)。
     """
     collected = collect_genai_response(messages, model, max_tokens, settings, access_token, image_payload,
-                                       net_go, thinking, chat_group_id)
+                                       net_go, thinking, chat_group_id, chat_info_suffix)
     logger.debug("tools path raw content (first 500): %r", collected["content"][:4000])
     tool_calls = parse_tool_calls_from_content(collected["content"])
     if not tool_calls and collected["reasoning_content"]:
         # 模型有时把调用 JSON 写进思维链而不是正文。
         tool_calls = parse_tool_calls_from_content(collected["reasoning_content"])
-    if tool_calls or collected["content"]:
+    if tool_calls:
+        return collected, tool_calls
+
+    must_call = tool_choice == "required" or isinstance(tool_choice, dict)
+    if must_call and collected["content"]:
+        # required/指定函数 场景：用文字回答了但没给 JSON，同样是失败，催问重试。
+        logger.info("prose answer without tool calls under required tool_choice; retrying once")
+        collected, tool_calls = _retry_with_nudge(messages, TURN_NUDGE_REQUIRED, model, max_tokens, settings,
+                                                  access_token, image_payload, net_go, thinking, chat_group_id,
+                                                  chat_info_suffix)
+        return collected, tool_calls
+
+    if collected["content"]:
         return collected, tool_calls
 
     logger.info("empty turn with tools enabled; retrying once with a nudge")
-    nudged = [*messages, {"role": "user", "content": TURN_NUDGE}]
-    collected = collect_genai_response(nudged, model, max_tokens, settings, access_token, image_payload,
-                                       net_go, thinking, chat_group_id)
-    logger.debug("tools path raw content after nudge (first 500): %r", collected["content"][:4000])
-    tool_calls = (parse_tool_calls_from_content(collected["content"])
-                  or parse_tool_calls_from_content(collected["reasoning_content"]))
+    collected, tool_calls = _retry_with_nudge(messages, TURN_NUDGE, model, max_tokens, settings,
+                                              access_token, image_payload, net_go, thinking, chat_group_id,
+                                              chat_info_suffix)
     if not tool_calls and not collected["content"] and not collected["reasoning_content"]:
         # 重试后仍为空（上游空轮爆发期）：给出明确提示而不是让客户端白屏。
         collected["content"] = "[上游本轮返回了空响应（平台可能正忙），请重试]"
@@ -104,7 +132,7 @@ def build_chat_completion_payload(model, content, reasoning_content=None, tool_c
 
 
 def stream_chat_completions_response(messages, model, max_tokens, settings, access_token=None, image_payload=None,
-                                     net_go=False, thinking=None, chat_group_id=None):
+                                     net_go=False, thinking=None, chat_group_id=None, chat_info_suffix=None):
     """将内部事件流转换为 Chat Completions SSE。
 
     Args:
@@ -124,7 +152,7 @@ def stream_chat_completions_response(messages, model, max_tokens, settings, acce
     completion_chars = 0
 
     for event in stream_genai_events(messages, model, max_tokens, settings, access_token, image_payload,
-                                     net_go, thinking, chat_group_id):
+                                     net_go, thinking, chat_group_id, chat_info_suffix):
         if event["type"] == "error":
             yield f"data: {json.dumps({'error': event['error']})}\n\n"
             return
@@ -313,6 +341,8 @@ def chat_completions():
             return jsonify({'error': 'No user message found'}), 400
 
         tools_enabled = should_enable_tools(tools, tool_choice)
+        normalized_choice = normalize_tool_choice(tool_choice)
+        info_suffix = chat_info_suffix(normalized_choice) if tools_enabled else None
         # deepseek-pro 的 thinking 与工具调用在上游不兼容（会只思考不输出正文/调用），
         # 带工具的请求丢弃 thinking 标志。
         if tools_enabled and thinking and resolve_model(model)[0] == "deepseek-pro":
@@ -325,7 +355,8 @@ def chat_completions():
         if stream:
             if tools_enabled:
                 collected, tool_calls = collect_tool_turn(upstream_messages, model, max_tokens, settings,
-                                                          access_token, image_payload, net_go, thinking, chat_group_id)
+                                                          access_token, image_payload, net_go, thinking, chat_group_id,
+                                                          info_suffix, normalized_choice)
                 # 思维链独占一轮（正文为空）时把思维链当正文透出，避免客户端空白。
                 visible_content = collected["content"] or collected["reasoning_content"]
                 return Response(
@@ -336,7 +367,7 @@ def chat_completions():
 
             return Response(
                 stream_with_context(stream_chat_completions_response(upstream_messages, model, max_tokens, settings, access_token, image_payload,
-                                                                     net_go, thinking, chat_group_id)),
+                                                                     net_go, thinking, chat_group_id, info_suffix)),
                 mimetype='text/event-stream',
                 headers=SSE_HEADERS,
             )
@@ -344,7 +375,8 @@ def chat_completions():
         # 非流式模式先完整收集，再一次性组装 OpenAI 响应体。
         if tools_enabled:
             collected, tool_calls = collect_tool_turn(upstream_messages, model, max_tokens, settings,
-                                                      access_token, image_payload, net_go, thinking, chat_group_id)
+                                                      access_token, image_payload, net_go, thinking, chat_group_id,
+                                                      info_suffix, normalized_choice)
         else:
             collected = collect_genai_response(upstream_messages, model, max_tokens, settings, access_token, image_payload,
                                                net_go, thinking, chat_group_id)
