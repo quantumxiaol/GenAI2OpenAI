@@ -255,4 +255,6 @@ def responses():
 
     except Exception as e:
         logger.exception("responses failed")
+        if "Request too large" in str(e):
+            return jsonify({'error': {'message': str(e), 'type': 'request_too_large', 'code': 413}}), 413
         return jsonify({'error': str(e)}), 500

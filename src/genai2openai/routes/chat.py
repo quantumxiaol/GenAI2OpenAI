@@ -397,4 +397,7 @@ def chat_completions():
 
     except Exception as e:
         logger.exception("chat_completions failed")
+        # 载荷超限返回 413（客户端错误）：OpenAI 客户端不会重试，避免死循环重发同一超大请求。
+        if "Request too large" in str(e):
+            return jsonify({'error': {'message': str(e), 'type': 'request_too_large', 'code': 413}}), 413
         return jsonify({'error': str(e)}), 500
