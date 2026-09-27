@@ -328,6 +328,10 @@ opencode 对自定义 provider 的模型默认不启用工具调用，需要在�
 
 2026-09-18 实测：本地部署模型（kimi-k3、deepseek-v4.1）与 Azure 路由模型均可正常读图，`imageUrl` 与 `imageUrls[]` 两种字段形式上游都接受。
 
+2026-09-27 端到端实测：opencode 中直接贴图（模型条目配好 `modalities.input` 含 `image` 后 opencode 才会放行附件），经代理转发，DeepSeek V4.1 成功读取并详细解读截图——界面文案、物料统计、`src/App.tsx:1092` 这类代码行号引用均识别正确：
+
+![opencode 图片输入实测](images/opencode_image.png)
+
 注意：带图片的请求不会携带 `chatGroupId`（上游对该组合会报图片加载错误），因此图片问答不会归入归组会话。
 
 示例：
