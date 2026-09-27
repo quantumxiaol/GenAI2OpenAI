@@ -98,14 +98,17 @@ def upload_image_to_genai(image_bytes, filename, mime_type, settings: Settings, 
 
 
 def parse_image_input_from_message(message):
-    """从单条 OpenAI user message 中提取图片输入（URL 或 data URL）。
+    """从单条 OpenAI user/tool message 中提取图片输入（URL 或 data URL）。
 
     兼容的 part 形态：
     - `image_url` / `input_image`（OpenAI 标准）
     - `file`（AI SDK v5：{"type":"file","file":{"data":<base64>,"mediaType":"image/png"}}）
     - `image`（{"type":"image","image"/"url"/"data": ...}）
+
+    opencode 等 harness 贴图有两条送达路径：直接嵌在 user 消息里，或经 read
+    工具以 tool 结果返回（agent 读附件文件）。两处都要扫。
     """
-    if not isinstance(message, dict) or message.get("role") != "user":
+    if not isinstance(message, dict) or message.get("role") not in {"user", "tool"}:
         return None
 
     content = message.get("content")
@@ -158,7 +161,11 @@ def parse_image_input_from_message(message):
 
 
 def prepare_image_payload(messages, model, settings: Settings, access_token=None):
-    """从请求消息中准备上游所需图片参数（本地与 Azure 路由模型均已验证可用）。"""
+    """从请求消息中准备上游所需图片参数（本地与 Azure 路由模型均已验证可用）。
+
+    图片来源两处：user 消息内嵌的图片 part，以及 harness 经 read 工具返回的
+    图片 tool 结果（opencode 贴附件走的就是这条路）。
+    """
     image_input = None
     for message in reversed(messages):
         image_input = parse_image_input_from_message(message)
@@ -166,14 +173,18 @@ def prepare_image_payload(messages, model, settings: Settings, access_token=None
             break
 
     if not image_input:
-        # 顺带记录实际收到的 part 类型，便于定位"客户端发了图但格式不认识"。
-        part_types = [
-            part.get("type")
-            for msg in messages if isinstance(msg, dict) and msg.get("role") == "user"
-            for part in (msg.get("content") if isinstance(msg.get("content"), list) else [])
-            if isinstance(part, dict)
-        ]
-        logger.debug("No image input found in messages (part types seen: %s)", part_types)
+        # 顺带记录实际收到的 part 类型（按角色分组），便于定位"客户端发了图但格式不认识"。
+        part_types = {}
+        for msg in messages:
+            if not isinstance(msg, dict):
+                continue
+            role = msg.get("role", "?")
+            content = msg.get("content")
+            if isinstance(content, list):
+                types = [part.get("type") for part in content if isinstance(part, dict)]
+                if types:
+                    part_types.setdefault(role, []).extend(types)
+        logger.debug("No image input found in messages (part types by role: %s)", part_types)
         return None
 
     if image_input.startswith("data:"):
