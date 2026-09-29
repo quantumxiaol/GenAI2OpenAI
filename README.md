@@ -57,6 +57,7 @@ GenAI 是一个基于 Flask 的聊天机器人接口服务，兼容 OpenAI 的�
 | 认证头兼容（Bearer/API Key）              | ✅              | ✅             | 支持 `Authorization`、`X-Access-Token`、`api-key` 等       |
 | 联网搜索 / 深度思考                        | 无原生字段      | ✅ 已映射      | 模型名后缀 `-search` / `-thinking` / `-nothink` 或请求体 `net_go` / `thinking` 字段 |
 | Token 用量（usage）                        | ✅              | ✅ 部分        | `total_tokens` 为上游真实值；`prompt`/`completion` 分项为估算 |
+| 服务级用量统计（`GET /v1/usage`）          | 无              | ✅ 已提供      | 每次上游调用自动记账，按天 × 模型聚合，便于盯 Azure 月额度  |
 
 ### Agent Tool 生态测试
 
@@ -185,6 +186,7 @@ remotePort = 11435
 - `POST /v1/chat/completions` 支持图片输入（服务端自动上传到 GenAI 图片服务后再发起对话），本地与 Azure 模型均已验证可用。
 - 提供 `/v1/models` 接口列出可用模型，如 `kimi-k3`、`deepseek-v4.1`、`gpt-6-astra`、`glm-5.3-flash` 等。
 - 内置 `/health` 健康检查接口，用于服务状态监测。
+- `GET /v1/usage?days=N` 返回全服务的 token 用量统计（按天 × 模型聚合），每次上游调用自动记账，详见下文"用量统计"。
 
 ### 支持模型
 
@@ -394,6 +396,23 @@ curl http://127.0.0.1:11435/v1/images/generations \
 - **请求级**：请求体加 `"chat_group_id": "<名字>"` 覆盖启动配置（传空字符串可单次关闭归组）。不能自定义请求体的标准客户端（如 opencode）改用请求头 `X-GenAI-Chat-Group: <名字>`（上文 opencode 配置已带）。客户端可以借此把自己的流量归到专属会话。
 
 两个例外：带图片的请求不携带分组 ID（上游对该组合会报图片加载错误）；归组只影响网页版的记录归档，每次请求的上下文仍由 `messages` 决定，不会互相串味。
+
+### 用量统计
+
+每次上游调用自动记账到启动目录的 `.genai_usage.jsonl`（一行一条 JSON），`GET /v1/usage?days=N`（默认 30 天，上限 3650）返回按天 × 模型的聚合：
+
+```bash
+curl http://127.0.0.1:11435/v1/usage?days=7 \
+  -H "Authorization: Bearer <GENAI_API_KEY>"
+```
+
+返回 `total_requests` / `total_tokens` / `by_model` / `by_day` 三级汇总。说明：
+
+- `total_tokens` 为上游返回的真实 totalTokens（含 prompt 与思维链），上游只给总数，无 prompt/completion 分项。
+- `estimated_requests` / `estimated` 标记上游未返回 token 数的请求（消耗存在但无法计量）。
+- 记账覆盖 chat 流式/非流式、tools 路径（空轮重试的每次上游调用各记一笔）、responses 与文生图；Azure 系模型按模型名分桶，方便盯 100 万 tokens/月额度。
+- 数据文件不自动轮转（一年约几十 MB），需要清理时直接截断 `.genai_usage.jsonl` 即可。
+- 该端点在 `GENAI_API_KEY` 鉴权模式下同样校验密钥；无鉴权模式经 frp 暴露时它也无保护，建议始终设置 `GENAI_API_KEY`。
 
 ## Token 获取
 

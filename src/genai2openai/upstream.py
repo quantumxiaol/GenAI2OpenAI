@@ -6,6 +6,7 @@ import requests
 from .config import GATEWAY_PAYLOAD_LIMIT, GENAI_URL, Settings, build_genai_headers
 from .messages import split_chat_info
 from .registry import resolve_model
+from .usage import record_usage
 
 logger = logging.getLogger("genai-proxy")
 
@@ -240,6 +241,9 @@ def _stream_genai_events_once(messages, model, max_tokens, settings: Settings, a
             except json.JSONDecodeError:
                 pass
 
+        # 用量记账：单点覆盖 chat 流式/非流式、tools 路径（含空轮重试）、
+        # responses 全部链路；每次上游调用（含重试）都真实消耗，各自记账。
+        record_usage(model, upstream_model=final_upstream_model, total_tokens=usage_total, kind="chat")
         yield {
             "type": "done",
             "upstream_model": final_upstream_model,

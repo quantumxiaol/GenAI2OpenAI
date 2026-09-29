@@ -205,6 +205,7 @@ cython_debug/
 /temp
 /AGENTS.md
 .genai_token_cache
+.genai_usage.jsonl
 
 # Marimo
 marimo/_static/

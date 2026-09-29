@@ -5,6 +5,7 @@ from flask import Blueprint, current_app, jsonify, request
 
 from ..auth import get_request_access_token
 from ..config import GENAI_IMAGE_STATIC_URL, GENAI_URL, build_genai_headers
+from ..usage import record_usage
 from . import SETTINGS_CONFIG_KEY
 
 logger = logging.getLogger("genai-proxy")
@@ -98,6 +99,15 @@ def images_generations():
         for item in result.get("data", []):
             if isinstance(item, dict) and item.get("url"):
                 data.append({"url": to_absolute_image_url(item["url"])})
+
+        # 用量记账：上游 usage 可能是 dict（取 total_tokens）或纯数字。
+        usage = result.get("usage")
+        total_tokens = None
+        if isinstance(usage, dict):
+            total_tokens = usage.get("total_tokens")
+        elif isinstance(usage, (int, float)):
+            total_tokens = int(usage)
+        record_usage(model, total_tokens=total_tokens, kind="image")
 
         body = {
             "created": result.get("created"),
