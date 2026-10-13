@@ -256,6 +256,7 @@ uv run tools/skills/context_length_tester/context_length_tester.py --model kimi-
 
 - 三种格式全部识别并合并：提示词约定的 **JSON**、XML 标签块 `<tool_call>...</tool_call>`、以及 **Kimi 原生工具标记**（`call tool="..."` 特殊 token 序列，K3 会无视提示词直接输出它）；同一轮混用多种格式也不会丢调用，同名同参数的重复调用自动去重。
 - 实测提示：Kimi-K3 思考链长、且偶尔声称"没有工具可用"（幻觉，实际调用已成功），agent 场景更推荐 `deepseek-v4.1`。
+- GLM 的工具调用局限（2026-10-13 实测）：`glm-5.3-flash` 会在正文里输出大段英文推理独白再接工具 JSON——解析器能捞出 JSON，但独白会吃掉 maxToken 导致输出截断，且多轮循环中模型常把"我要调某工具"的意图写成独白文字而不是 JSON，工具循环随时可能中断；`-thinking` 与 tools 组合时上游稳定空轮（疑似原生工具 token 被服务层剥掉），代理已自动丢弃 thinking 标志兜底。结论：GLM 可作聊天/单轮调用备胎，agentic 多轮工具循环请用 `deepseek-v4.1`。
 - 当模型输出多个调用时，会按顺序解析为多个 `tool_calls`。
 - 鲁棒性机制：思维链（`reasoning_content`）中的调用 JSON 也会参与解析；正文为空时把思维链透出为正文，客户端不白屏；空轮自动追加催问重试一次；尾随逗号等"伪合法 JSON"宽容解析；尾部提醒用上游编码器同款句式反注入 `tool_choice=auto`。
 

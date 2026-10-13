@@ -343,10 +343,11 @@ def chat_completions():
         tools_enabled = should_enable_tools(tools, tool_choice)
         normalized_choice = normalize_tool_choice(tool_choice)
         info_suffix = chat_info_suffix(normalized_choice) if tools_enabled else None
-        # deepseek-pro 的 thinking 与工具调用在上游不兼容（会只思考不输出正文/调用），
-        # 带工具的请求丢弃 thinking 标志。
-        if tools_enabled and thinking and resolve_model(model)[0] == "deepseek-pro":
-            logger.info("dropping thinking flag: incompatible with tool calling on deepseek-pro")
+        # 部分模型的 thinking 与工具调用在上游不兼容（只思考不输出正文/调用；GLM 实测
+        # thinking+tools 稳定空轮，疑似原生工具 token 被服务层剥掉），带工具的请求丢弃 thinking 标志。
+        upstream_model_name = resolve_model(model)[0]
+        if tools_enabled and thinking and upstream_model_name in ("deepseek-pro", "chatglm"):
+            logger.info("dropping thinking flag: incompatible with tool calling on %s", upstream_model_name)
             thinking = None
         upstream_messages = normalize_messages_for_genai(messages)
         if tools_enabled:
