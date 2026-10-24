@@ -405,6 +405,9 @@ curl http://127.0.0.1:11435/v1/images/generations \
 ```bash
 curl http://127.0.0.1:11435/v1/usage?days=7 \
   -H "Authorization: Bearer <GENAI_API_KEY>"
+
+set -a; source .env; set +a
+curl "$GENAI_API_BASE_URL/usage?days=30" -H "Authorization: Bearer $GENAI_API_KEY"
 ```
 
 返回 `total_requests` / `total_tokens` / `by_model` / `by_day` 三级汇总。说明：

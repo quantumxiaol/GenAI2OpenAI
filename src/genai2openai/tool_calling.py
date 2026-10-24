@@ -133,19 +133,52 @@ def strip_json_code_fence(text):
     return stripped
 
 
-def _loads_lenient(text):
-    """宽容版 json.loads：先严格解析，失败后去掉尾随逗号（`...,}`/`...,]`）再试一次。
+def _strip_stray_parens(text):
+    """删除 JSON 字符串之外的孤立右括号。
 
-    模型输出"看起来合法"的 JSON 时最常见的瑕疵就是尾随逗号。
+    Kimi-K3 会把原生函数调用语法的 `)` 混进 JSON 尾部（如 `..."}})]}`），
+    JSON 结构里字符串外的 `)` 永远非法，删掉安全；字符串内的保留。
     """
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        cleaned = re.sub(r",\s*([}\]])", r"\1", text)
+    out = []
+    in_string = False
+    escape = False
+    for char in text:
+        if in_string:
+            out.append(char)
+            if escape:
+                escape = False
+            elif char == "\\":
+                escape = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+            out.append(char)
+        elif char == ")":
+            continue
+        else:
+            out.append(char)
+    return "".join(out)
+
+
+def _loads_lenient(text):
+    """宽容版 json.loads：严格 → 去尾随逗号 → 删字符串外孤立 `)`，逐级重试。
+
+    模型输出"看起来合法"的 JSON 时最常见的瑕疵是尾随逗号；K3 另会把原生
+    函数调用语法的右括号混进 JSON 尾部（形如 `...")]}`）。
+    """
+    for candidate in (text, _strip_stray_parens(text)):
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError:
+            pass
+        cleaned = re.sub(r",\s*([}\]])", r"\1", candidate)
         try:
             return json.loads(cleaned)
         except json.JSONDecodeError:
-            return None
+            continue
+    return None
 
 
 def extract_json_object(text):
