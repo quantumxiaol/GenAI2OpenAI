@@ -311,6 +311,13 @@ def chat_completions():
                                      f"Use a local model instead (kimi-k3 / deepseek-v4.1 / glm-5.3-flash / qwen-3.8)."}), 400
         net_go = req_data.get('net_go', model_flags.get('net_go', False))
         thinking = req_data.get('thinking', model_flags.get('thinking'))
+        # DeepSeek 官方协议的 thinking 是对象（{"type": "enabled"/"disabled"}），
+        # dsh 的 thinkingFormat: deepseek 会发这种形态；归一化为布尔，避免 disabled 被当成开启。
+        if isinstance(thinking, dict):
+            thinking = thinking.get("type") == "enabled"
+        # OpenAI 的 reasoning_effort 只有档位：off/none 以外一律视为开启思考。
+        if thinking is None and req_data.get("reasoning_effort"):
+            thinking = str(req_data["reasoning_effort"]).lower() not in ("off", "none")
         # 请求级会话归组（None=跟随启动配置，空字符串=显式关闭本次归组）。
         # 请求体字段优先；不能自定义 body 的标准客户端（如 opencode）用 X-GenAI-Chat-Group 头。
         chat_group_id = req_data.get('chat_group_id')

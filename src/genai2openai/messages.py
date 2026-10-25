@@ -73,6 +73,9 @@ def normalize_messages_for_genai(messages):
             continue
 
         role = message.get("role", "user")
+        if role == "developer":
+            # OpenAI/dsh 对推理模型用 developer 承载系统提示；上游只认 system。
+            role = "system"
         content = normalize_content_for_genai(message.get("content"))
 
         if role == "tool":
