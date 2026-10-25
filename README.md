@@ -320,7 +320,7 @@ dsh 支持自定义 OpenAI 兼容提供方，本项目已适配其请求形状�
 
 Web UI 操作路径：**设置 → 模型 → 添加模型提供商 → 自定义模型 API**，API 协议选 **OpenAI Chat Completions**，填 Provider ID（如 `genai`）、基础 URL（`http://127.0.0.1:11435/v1` 或 frp 地址）、API 密钥（`GENAI_API_KEY`），模型手动添加 `deepseek-v4.1` 等（也可点"获取可用模型"探测 `/v1/models`）。声明了推理等级的模型其系统提示会以 `developer` role 发送，代理已兼容，无需额外开关。
 
-也可以直接编辑 `$DSH_HOME/profiles/web/cordis.patch.yml`：
+也可以直接编辑 `$DSH_HOME/profiles/web/cordis.patch.yml`。接入全部模型（含联网/深思变体）的完整配置：
 
 ```yaml
 - id: llm-pi-ai
@@ -332,17 +332,56 @@ Web UI 操作路径：**设置 → 模型 → 添加模型提供商 → 自定�
         baseURL: http://127.0.0.1:11435/v1
         defaultInput: [text, image]
         models:
-          - id: deepseek-v4.1
-          - id: deepseek-v4.1-thinking
-            reasoningEfforts:
-              off:
-              high: high
           - id: kimi-k3
+            contextWindow: 192000
+            maxTokens: 16384
+          - id: kimi-k3-thinking
+            contextWindow: 192000
+            maxTokens: 16384
+          - id: kimi-k3-search
+            contextWindow: 192000
+            maxTokens: 16384
+          - id: deepseek-v4.1
+            contextWindow: 262144
+            maxTokens: 16384
+            reasoningEfforts:
+              "off":
+              high: high
+          - id: deepseek-v4.1-thinking
+            contextWindow: 262144
+            maxTokens: 16384
+          - id: deepseek-v4.1-search
+            contextWindow: 262144
+            maxTokens: 16384
           - id: glm-5.3-flash
+            contextWindow: 262144
+            maxTokens: 16384
+          - id: glm-5.3-flash-search
+            contextWindow: 262144
+            maxTokens: 16384
+          - id: qwen-3.8
+            contextWindow: 131072
+            maxTokens: 16384
+          - id: qwen-3.8-search
+            contextWindow: 131072
+            maxTokens: 16384
+          - id: gpt-6-astra
+            contextWindow: 262144
+            maxTokens: 16384
+          - id: gpt-6-sol
+            contextWindow: 262144
+            maxTokens: 16384
+          - id: gpt-6-luna
+            contextWindow: 262144
+            maxTokens: 16384
 ```
 
+- `baseURL` 换 frp 地址即可远程用（与 opencode 同一个）；`apiKeyEnv: GENAI_API_KEY` 从环境变量读密钥（`set -a; source .env; set +a` 后启动 `dsh web`）。
+- 用"获取可用模型"（探测 `/v1/models`）添加与手动配置等价；注意探测清单不含 `-search`/`-thinking` 后缀变体，这些按需手动补。
 - `defaultInput: [text, image]` 声明全部模型可贴图（dsh 默认只放行文本）；`reasoningEfforts` 声明后模型选择器出现推理等级菜单，`off` 即 `reasoning_effort=off`（代理映射为不思考），其余档位视为思考。也可用模型名后缀 `-thinking` / `-nothink` 显式控制，二选一。
-- dsh 默认的 `max_completion_tokens` 字段代理已兼容，无需 `compat.maxTokensField`。
+- dsh 默认的 `max_completion_tokens` 字段代理已兼容，无需 `compat.maxTokensField`；声明了推理等级的模型其系统提示以 `developer` role 发送，代理已映射为 `system`，也无需 `compat.supportsDeveloperRole`。
+- 若服务端开了 `GENAI_DISABLE_AZURE=1`，删掉 3 个 GPT 条目。
+- 协议选择：dsh 的三种协议里，**OpenAI Chat Completions 全功能**（流式、工具、图片、思维链）；**OpenAI Responses 为最小兼容**（仅文本 input、流式/非流式，不支持工具调用与图片），要用需另建一个 `api: openai-responses` 的 provider；Anthropic Messages 不支持。agentic 场景请用 Chat Completions。
 - agentic 工具循环建议首选 `deepseek-v4.1`（GLM 多轮工具循环不可靠，K3 偶有模板病，见上文工具调用节）。
 
 ### 图片输入
