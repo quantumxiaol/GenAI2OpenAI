@@ -24,7 +24,11 @@ def list_models():
             "id": spec["public_id"],
             "object": "model",
             "owned_by": "genai",
-            "permission": []
+            "permission": [],
+            # 网关扩展字段（OpenAI 官方列表没有，dsh/OpenRouter 等客户端的
+            # 模型发现会读取）：上下文窗口与最大输出 token，供客户端自动配置。
+            "context_window": spec["context_window"],
+            "max_output_tokens": spec["max_output_tokens"],
         })
 
     return jsonify({"object": "list", "data": models})
