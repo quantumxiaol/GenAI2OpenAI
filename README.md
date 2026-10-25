@@ -377,7 +377,7 @@ Web UI 操作路径：**设置 → 模型 → 添加模型提供商 → 自定�
 ```
 
 - `baseURL` 换 frp 地址即可远程用（与 opencode 同一个）；`apiKeyEnv: GENAI_API_KEY` 从环境变量读密钥（`set -a; source .env; set +a` 后启动 `dsh web`）。
-- 用"获取可用模型"（探测 `/v1/models`）添加与手动配置等价；注意探测清单不含 `-search`/`-thinking` 后缀变体，这些按需手动补。
+- 用"获取可用模型"（探测 `/v1/models`）添加与手动配置等价；注意探测清单不含 `-search`/`-thinking` 后缀变体，这些按需手动补。`/v1/models` 只返回模型 id 等基础字段、**不含上下文窗口**，探测添加后请按上面配置手动设置各模型的 `contextWindow` / `maxTokens`。
 - `defaultInput: [text, image]` 声明全部模型可贴图（dsh 默认只放行文本）；`reasoningEfforts` 声明后模型选择器出现推理等级菜单，`off` 即 `reasoning_effort=off`（代理映射为不思考），其余档位视为思考。也可用模型名后缀 `-thinking` / `-nothink` 显式控制，二选一。
 - dsh 默认的 `max_completion_tokens` 字段代理已兼容，无需 `compat.maxTokensField`；声明了推理等级的模型其系统提示以 `developer` role 发送，代理已映射为 `system`，也无需 `compat.supportsDeveloperRole`。
 - 若服务端开了 `GENAI_DISABLE_AZURE=1`，删掉 3 个 GPT 条目。

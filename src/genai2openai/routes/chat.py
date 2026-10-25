@@ -132,7 +132,8 @@ def build_chat_completion_payload(model, content, reasoning_content=None, tool_c
 
 
 def stream_chat_completions_response(messages, model, max_tokens, settings, access_token=None, image_payload=None,
-                                     net_go=False, thinking=None, chat_group_id=None, chat_info_suffix=None):
+                                     net_go=False, thinking=None, chat_group_id=None, chat_info_suffix=None,
+                                     include_usage=False):
     """将内部事件流转换为 Chat Completions SSE。
 
     Args:
@@ -197,20 +198,38 @@ def stream_chat_completions_response(messages, model, max_tokens, settings, acce
                     }
                 ]
             }
-            # 上游提供真实 totalTokens 时，在末块附带 usage（OpenAI include_usage 风格）。
+            usage = None
             if event.get("usage") is not None:
-                final_response["usage"] = {
+                usage = {
                     "prompt_tokens": 0,
                     "completion_tokens": completion_chars,
                     "total_tokens": event["usage"],
                 }
+                # 末块内嵌 usage 保留（向后兼容既有客户端）。
+                final_response["usage"] = usage
             yield f"data: {json.dumps(final_response)}\n\n"
+            if include_usage and usage is not None:
+                # OpenAI include_usage 标准形态：finish 块之后、DONE 之前补一个
+                # choices 为空的独立 usage 块；dsh/pi-ai 等客户端只认这个位置。
+                usage_chunk = {
+                    "id": response_id,
+                    "object": "chat.completion.chunk",
+                    "created": created,
+                    "model": model,
+                    "choices": [],
+                    "usage": usage,
+                }
+                yield f"data: {json.dumps(usage_chunk)}\n\n"
             yield "data: [DONE]\n\n"
             return
 
 
-def stream_tool_calls_response(model, content, tool_calls):
-    """将完整解析出的工具调用转换为 Chat Completions SSE。"""
+def stream_tool_calls_response(model, content, tool_calls, usage=None, include_usage=False):
+    """将完整解析出的工具调用转换为 Chat Completions SSE。
+
+    usage 为上游真实 token 统计（dict 或 None）；include_usage 时在 finish 块后
+    补一个 choices 为空的独立 usage 块（OpenAI include_usage 标准形态）。
+    """
     response_id = f"chatcmpl-{uuid.uuid4().hex[:24]}"
     created = int(datetime.now().timestamp())
 
@@ -274,6 +293,16 @@ def stream_tool_calls_response(model, content, tool_calls):
         ]
     }
     yield f"data: {json.dumps(final_response)}\n\n"
+    if include_usage and usage is not None:
+        usage_chunk = {
+            "id": response_id,
+            "object": "chat.completion.chunk",
+            "created": created,
+            "model": model,
+            "choices": [],
+            "usage": usage,
+        }
+        yield f"data: {json.dumps(usage_chunk)}\n\n"
     yield "data: [DONE]\n\n"
 
 
@@ -361,21 +390,32 @@ def chat_completions():
             upstream_messages = build_tool_calling_messages(upstream_messages, tools, tool_choice)
 
         if stream:
+            stream_options = req_data.get("stream_options") or {}
+            include_usage = bool(stream_options.get("include_usage"))
             if tools_enabled:
                 collected, tool_calls = collect_tool_turn(upstream_messages, model, max_tokens, settings,
                                                           access_token, image_payload, net_go, thinking, chat_group_id,
                                                           info_suffix, normalized_choice)
                 # 思维链独占一轮（正文为空）时把思维链当正文透出，避免客户端空白。
                 visible_content = collected["content"] or collected["reasoning_content"]
+                tool_usage = None
+                if collected.get("usage_total") is not None:
+                    tool_usage = {
+                        "prompt_tokens": 0,
+                        "completion_tokens": len(collected["content"] or "") + len(collected["reasoning_content"] or ""),
+                        "total_tokens": collected["usage_total"],
+                    }
                 return Response(
-                    stream_with_context(stream_tool_calls_response(model, visible_content, tool_calls)),
+                    stream_with_context(stream_tool_calls_response(model, visible_content, tool_calls,
+                                                                   usage=tool_usage, include_usage=include_usage)),
                     mimetype='text/event-stream',
                     headers=SSE_HEADERS,
                 )
 
             return Response(
                 stream_with_context(stream_chat_completions_response(upstream_messages, model, max_tokens, settings, access_token, image_payload,
-                                                                     net_go, thinking, chat_group_id, info_suffix)),
+                                                                     net_go, thinking, chat_group_id, info_suffix,
+                                                                     include_usage=include_usage)),
                 mimetype='text/event-stream',
                 headers=SSE_HEADERS,
             )
