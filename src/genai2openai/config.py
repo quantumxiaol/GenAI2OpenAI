@@ -102,8 +102,8 @@ class Settings:
     chat_group_id: str | None = None
 # 代理自身的 API 鉴权密钥；设置后 /v1/* 需要 `Authorization: Bearer <key>`。
     api_key: str | None = None
-    # 禁用 GPT/Azure 路由模型（GENAI_DISABLE_AZURE=1 启用）：
-    # /v1/models 不再列出，相关请求直接报错，避免误用 Azure 额度。
+    # 禁用 GPT/Azure 聊天模型（GENAI_DISABLE_AZURE=1 启用）：
+    # /v1/models 不再列出，对话请求直接报错，避免误用 Azure 额度；不影响文生图。
     disable_azure: bool = False
     # 单独禁用文生图接口（GENAI_DISABLE_IMAGE_GEN=1 启用）：
     # /v1/images/generations 返回明确 400，不影响 GPT 聊天模型；同样防止误用 Azure 额度。

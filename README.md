@@ -136,8 +136,8 @@ tools/                  # 客户端工具（benchmark、上下文长度测试）
 
 仅环境变量（无对应命令行参数）：
 
-- `GENAI_DISABLE_AZURE=1`：禁用 GPT/Azure 路由模型（`/v1/models` 不再列出，对话与图像生成请求返回明确 400），保护 Azure 额度；默认不启用。
-- `GENAI_DISABLE_IMAGE_GEN=1`：单独禁用文生图接口（`/v1/images/generations` 返回明确 400），不影响 GPT 聊天模型；默认不启用。
+- `GENAI_DISABLE_AZURE=1`：禁用 GPT/Azure **聊天**模型（`/v1/models` 不再列出，对话请求返回明确 400），保护 Azure 额度；**不影响文生图**。默认不启用。
+- `GENAI_DISABLE_IMAGE_GEN=1`：单独禁用文生图接口（`/v1/images/generations` 返回明确 400），不影响 GPT 聊天模型；默认不启用。两个开关独立：要"禁 Azure 聊天、保留生图"只设 `GENAI_DISABLE_AZURE=1` 即可；要全禁则两个都设。
 - `GENAI_THREADS=<n>`：waitress 线程池大小，默认 16。
 - 另有一项内置保护：请求体估算超过 ~880KB（网关 900KB 硬上限留余量）时直接报错拒绝，不去上游白跑。
 
@@ -151,7 +151,7 @@ GENAI_PORT=11435
 GENAI_HOST=127.0.0.1
 GENAI_CHAT_GROUP_ID=ApiProxy
 GENAI_API_KEY=   # 通过 frp 等暴露到本机以外时务必设置
-GENAI_DISABLE_AZURE=   # 设 1 禁用 GPT/Azure 模型
+GENAI_DISABLE_AZURE=   # 设 1 禁用 GPT/Azure 聊天模型（不影响文生图）
 GENAI_DISABLE_IMAGE_GEN=   # 设 1 单独禁用文生图接口（不影响 GPT 聊天）
 GENAI_THREADS=         # waitress 线程池，默认 16
 GENAI_API_BASE_URL=http://127.0.0.1:11435/v1   # 客户端测试工具（smoke/benchmark 等）默认打的地址

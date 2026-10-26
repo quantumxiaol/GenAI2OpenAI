@@ -39,10 +39,8 @@ def images_generations():
     """
     settings = current_app.config[SETTINGS_CONFIG_KEY]
     try:
-        # 图像生成模型全部走 Azure 路由，GENAI_DISABLE_AZURE 模式下整接口关闭。
-        if settings.disable_azure:
-            return jsonify({"error": "Azure/GPT models are disabled on this server (GENAI_DISABLE_AZURE)."}), 400
-        # 独立开关：只禁文生图、不影响 GPT 聊天模型。
+        # 文生图只受 GENAI_DISABLE_IMAGE_GEN 控制，与 GENAI_DISABLE_AZURE（聊天）解耦：
+        # 禁 Azure 聊天模型的同时可单独保留生图。
         if settings.disable_image_gen:
             return jsonify({"error": "Image generation is disabled on this server (GENAI_DISABLE_IMAGE_GEN)."}), 400
         req_data = request.get_json(silent=True)
