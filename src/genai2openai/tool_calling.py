@@ -162,13 +162,68 @@ def _strip_stray_parens(text):
     return "".join(out)
 
 
+def _balance_json_brackets(text):
+    """自动配平 JSON 括号（字符串感知），供宽容解析重试。
+
+    K3 写深嵌套调用（如 todo_write 的 todos 数组）会漏写或错位闭合括号：
+    例如 `..."}]}]}` 在 tool_calls 的 `]` 前漏了调用对象的 `}`，报错位置在
+    中间而非末尾，单纯末尾补全救不回。这里遇到 `]`/`}` 时若栈顶不匹配，
+    先补出对应闭合；末尾再补齐剩余未闭合；多余右括号丢弃。
+    字符串中间截断（内容不完整，防止把写一半的参数当完整值）返回 None；
+    修复结果仍须通过 json.loads 验证才会被采用。
+    """
+    out = []
+    stack = []
+    in_string = False
+    escape = False
+    for char in text:
+        if in_string:
+            out.append(char)
+            if escape:
+                escape = False
+            elif char == "\\":
+                escape = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+            out.append(char)
+        elif char in "{[":
+            stack.append(char)
+            out.append(char)
+        elif char in "}]":
+            # `]` 应闭合 `[`，`}` 应闭合 `{`；栈顶不匹配说明漏了另一层闭合，先补上。
+            wanted = "[" if char == "]" else "{"
+            closer = "}" if char == "]" else "]"
+            while stack and stack[-1] != wanted:
+                out.append(closer)
+                stack.pop()
+            if stack:
+                stack.pop()
+                out.append(char)
+            # 栈为空的多余右括号直接丢弃（模型多写闭合）。
+        else:
+            out.append(char)
+    if in_string:
+        return None
+    while stack:
+        out.append("}" if stack.pop() == "{" else "]")
+    return "".join(out)
+
+
 def _loads_lenient(text):
-    """宽容版 json.loads：严格 → 去尾随逗号 → 删字符串外孤立 `)`，逐级重试。
+    """宽容版 json.loads：严格 → 去尾随逗号 → 删字符串外孤立 `)` → 自动配平括号。
 
     模型输出"看起来合法"的 JSON 时最常见的瑕疵是尾随逗号；K3 另会把原生
-    函数调用语法的右括号混进 JSON 尾部（形如 `...")]}`）。
+    函数调用语法的右括号混进 JSON 尾部（形如 `...")]}`），深嵌套调用还会
+    漏写/错位闭合括号（如 todo_write 收尾少一个 `}`）。
     """
-    for candidate in (text, _strip_stray_parens(text)):
+    candidates = [text, _strip_stray_parens(text)]
+    balanced = _balance_json_brackets(text)
+    if balanced is not None:
+        candidates.append(balanced)
+    for candidate in candidates:
         try:
             return json.loads(candidate)
         except json.JSONDecodeError:
