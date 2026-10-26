@@ -42,6 +42,9 @@ def images_generations():
         # 图像生成模型全部走 Azure 路由，GENAI_DISABLE_AZURE 模式下整接口关闭。
         if settings.disable_azure:
             return jsonify({"error": "Azure/GPT models are disabled on this server (GENAI_DISABLE_AZURE)."}), 400
+        # 独立开关：只禁文生图、不影响 GPT 聊天模型。
+        if settings.disable_image_gen:
+            return jsonify({"error": "Image generation is disabled on this server (GENAI_DISABLE_IMAGE_GEN)."}), 400
         req_data = request.get_json(silent=True)
         if not req_data or not req_data.get("prompt"):
             return jsonify({"error": "Missing or invalid JSON body / missing prompt field"}), 400

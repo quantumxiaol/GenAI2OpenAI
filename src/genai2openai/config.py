@@ -105,6 +105,9 @@ class Settings:
     # 禁用 GPT/Azure 路由模型（GENAI_DISABLE_AZURE=1 启用）：
     # /v1/models 不再列出，相关请求直接报错，避免误用 Azure 额度。
     disable_azure: bool = False
+    # 单独禁用文生图接口（GENAI_DISABLE_IMAGE_GEN=1 启用）：
+    # /v1/images/generations 返回明确 400，不影响 GPT 聊天模型；同样防止误用 Azure 额度。
+    disable_image_gen: bool = False
 
 
 # 网关请求体硬上限约 900KB；估算超限在上游白跑一趟之前直接报错。

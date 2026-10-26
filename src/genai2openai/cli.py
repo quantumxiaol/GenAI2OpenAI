@@ -93,6 +93,7 @@ def main():
         chat_group_id=args.chat_group_id or os.environ.get("GENAI_CHAT_GROUP_ID"),
         api_key=args.api_key or os.environ.get("GENAI_API_KEY"),
         disable_azure=env_flag("GENAI_DISABLE_AZURE", False),
+        disable_image_gen=env_flag("GENAI_DISABLE_IMAGE_GEN", False),
     )
     setup_logging(settings.log_level)
 
