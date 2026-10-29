@@ -206,6 +206,7 @@ cython_debug/
 /AGENTS.md
 .genai_token_cache
 .genai_usage.jsonl
+generated_images/
 
 # Marimo
 marimo/_static/

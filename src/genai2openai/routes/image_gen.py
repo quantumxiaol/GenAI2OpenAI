@@ -1,4 +1,6 @@
+import base64
 import logging
+import os
 
 import requests
 from flask import Blueprint, current_app, jsonify, request
@@ -11,6 +13,10 @@ from . import SETTINGS_CONFIG_KEY
 logger = logging.getLogger("genai-proxy")
 
 image_gen_bp = Blueprint("image_gen", __name__)
+
+# 生成图片的本地留存目录（启动目录下，已 gitignore）：
+# 学校静态服务的图片可能有时效，代理下载保存后长期可用。
+GENERATED_IMAGE_DIR = os.path.join(os.getcwd(), "generated_images")
 
 # 对外模型名 → 上游 aiType（上游命名与页面展示名不一致，在此归一）。
 IMAGE_MODEL_MAP = {
@@ -28,6 +34,31 @@ def to_absolute_image_url(url):
     if url.startswith(("http://", "https://")):
         return url
     return f"{GENAI_IMAGE_STATIC_URL}{url.lstrip('/')}"
+
+
+def download_and_save_image(url):
+    """下载生成图片并保存到本地留存目录。
+
+    Returns:
+        tuple[str | None, bytes | None]: (本地保存路径, 图片字节)；下载或保存
+        失败返回 (None, None)，不阻断 url 模式的正常返回。
+    """
+    try:
+        resp = requests.get(url, timeout=60)
+        if resp.status_code != 200:
+            logger.warning("download generated image failed: HTTP %s", resp.status_code)
+            return None, None
+        image_bytes = resp.content
+        os.makedirs(GENERATED_IMAGE_DIR, exist_ok=True)
+        # basename 防路径穿越；上游文件名本身是 hash 命名，直接复用。
+        filename = os.path.basename(url.rstrip("/").rsplit("/", 1)[-1]) or "image.png"
+        local_path = os.path.join(GENERATED_IMAGE_DIR, filename)
+        with open(local_path, "wb") as fp:
+            fp.write(image_bytes)
+        return local_path, image_bytes
+    except (requests.RequestException, OSError) as exc:
+        logger.warning("download/save generated image failed: %s", exc)
+        return None, None
 
 
 @image_gen_bp.route('/v1/images/generations', methods=['POST'])
@@ -97,9 +128,23 @@ def images_generations():
             return jsonify({"error": f"GenAI upstream error: HTTP {response.status_code}", "detail": result}), 502
 
         data = []
+        # OpenAI 风格 response_format：url（默认，直接给学校图片服务地址）/
+        # b64_json（代理下载转 base64，客户端不依赖学校图片服务的可访问性）。
+        response_format = req_data.get("response_format", "url")
         for item in result.get("data", []):
             if isinstance(item, dict) and item.get("url"):
-                data.append({"url": to_absolute_image_url(item["url"])})
+                abs_url = to_absolute_image_url(item["url"])
+                # 每次生图都下载留存到本地目录（学校静态图片可能有时效）；
+                # 下载失败不阻断 url 模式，b64_json 模式则必须成功。
+                local_path, image_bytes = download_and_save_image(abs_url)
+                if local_path:
+                    logger.info("generated image saved to %s", local_path)
+                if response_format == "b64_json":
+                    if image_bytes is None:
+                        return jsonify({"error": "Failed to download generated image for b64_json encoding"}), 502
+                    data.append({"b64_json": base64.b64encode(image_bytes).decode("ascii")})
+                else:
+                    data.append({"url": abs_url})
 
         # 用量记账：上游 usage 可能是 dict（取 total_tokens）或纯数字。
         usage = result.get("usage")

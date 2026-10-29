@@ -460,6 +460,13 @@ curl http://127.0.0.1:11435/v1/images/generations \
 
 返回 `data[0].url` 为可直接访问的图片 URL（上游返回相对路径，代理已重写为绝对地址）；`size` / `quality`（low/medium/high）/ `style` / `output_format` / `n` 平铺透传；垫图用 `image_base64` 字段（纯 base64 或 data URL）。
 
+`response_format` 参数（默认 `url`）：
+
+- `url`：返回学校图片服务的 URL。注意该服务主要面向校内，校外客户端可能打不开图片。
+- `b64_json`：代理下载图片后返回 `data[0].b64_json`（base64 编码的图片内容），客户端不依赖学校图片服务的可访问性。解码保存示例：`... | jq -r '.data[0].b64_json' | base64 -D > out.png`（macOS；Linux 用 `base64 -d`）。
+
+**本地留存**：每次成功生图，代理都会把图片下载保存到启动目录的 `generated_images/`（已 gitignore，文件名沿用上游 hash 名），长期可用，不受学校静态目录时效影响。下载失败不影响 `url` 模式返回（仅记警告日志），`b64_json` 模式下载失败则返回 502。
+
 ### 会话记录
 
 默认情况下，每次 API 请求都会以最后一条用户消息为标题，在 GenAI 网页版会话列表中创建一条新会话。两种归组方式：
