@@ -198,6 +198,8 @@ remotePort = 11435
 | deepseek-v4.1   | 本地（不限量）         | 未知                   | 0.117s            | 449.95 tokens/s |
 | glm-5.3-flash   | 本地（不限量）         | ✅ `-thinking` 可用   | 0.198s            | 403.89 tokens/s |
 | qwen-3.8        | 本地（不限量）         | ❌ 无思考模式          | 0.214s            | 411.43 tokens/s |
+| gpt-6.1-sol     | Azure（100万 tokens/月）| 隐藏（思考不可见）| 未实测            | 未实测          |
+| gpt-6.1-terra   | Azure（100万 tokens/月）| 隐藏（思考不可见）| 未实测            | 未实测          |
 | gpt-6-astra     | Azure（100万 tokens/月）| 隐藏                  | 8.420s            | 75.30 tokens/s  |
 | gpt-6-sol       | Azure（100万 tokens/月）| 未知                  | 未实测            | 未实测          |
 | gpt-6-luna      | Azure（100万 tokens/月）| 未知                  | 未实测            | 未实测          |
@@ -293,6 +295,8 @@ opencode 对自定义 provider 的模型默认不启用工具调用，需要在�
         "glm-5.3-flash-search":   { "name": "GLM 5.3 Flash (联网)","tool_call": true, "attachment": true, "modalities": { "input": ["text", "image"], "output": ["text"] }, "limit": { "context": 262144, "output": 16384 } },
         "qwen-3.8":               { "name": "Qwen 3.8",            "tool_call": true, "attachment": true, "modalities": { "input": ["text", "image"], "output": ["text"] }, "limit": { "context": 131072, "output": 16384 } },
         "qwen-3.8-search":        { "name": "Qwen 3.8 (联网)",     "tool_call": true, "attachment": true, "modalities": { "input": ["text", "image"], "output": ["text"] }, "limit": { "context": 131072, "output": 16384 } },
+        "gpt-6.1-sol":            { "name": "GPT-6.1 Sol",        "tool_call": true, "attachment": true, "modalities": { "input": ["text", "image"], "output": ["text"] }, "limit": { "context": 262144, "output": 16384 } },
+        "gpt-6.1-terra":          { "name": "GPT-6.1 Terra",      "tool_call": true, "attachment": true, "modalities": { "input": ["text", "image"], "output": ["text"] }, "limit": { "context": 262144, "output": 16384 } },
         "gpt-6-astra":            { "name": "GPT-6 Astra",         "tool_call": true, "attachment": true, "modalities": { "input": ["text", "image"], "output": ["text"] }, "limit": { "context": 262144, "output": 16384 } },
         "gpt-6-sol":              { "name": "GPT-6 Sol",           "tool_call": true, "attachment": true, "modalities": { "input": ["text", "image"], "output": ["text"] }, "limit": { "context": 262144, "output": 16384 } },
         "gpt-6-luna":             { "name": "GPT-6 Luna",          "tool_call": true, "attachment": true, "modalities": { "input": ["text", "image"], "output": ["text"] }, "limit": { "context": 262144, "output": 16384 } }
@@ -366,6 +370,12 @@ Web UI 操作路径：**设置 → 模型 → 添加模型提供商 → 自定�
             maxTokens: 16384
           - id: qwen-3.8-search
             contextWindow: 131072
+            maxTokens: 16384
+          - id: gpt-6.1-sol
+            contextWindow: 262144
+            maxTokens: 16384
+          - id: gpt-6.1-terra
+            contextWindow: 262144
             maxTokens: 16384
           - id: gpt-6-astra
             contextWindow: 262144

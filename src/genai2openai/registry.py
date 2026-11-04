@@ -41,6 +41,22 @@ MODEL_SPECS = [
         "max_output_tokens": 16384,
     },
     {
+        "public_id": "gpt-6.1-sol",
+        "request_id": "GPT-6.1-Sol",
+        "actual_id": "GPT-6.1-Sol",
+        "root_ai_type": "azure",
+        "context_window": 262144,
+        "max_output_tokens": 16384,
+    },
+    {
+        "public_id": "gpt-6.1-terra",
+        "request_id": "GPT-6.1-Terra",
+        "actual_id": "GPT-6.1-Terra",
+        "root_ai_type": "azure",
+        "context_window": 262144,
+        "max_output_tokens": 16384,
+    },
+    {
         "public_id": "gpt-6-astra",
         "request_id": "gpt-6-astra",
         "actual_id": "GPT-6-Astra",
