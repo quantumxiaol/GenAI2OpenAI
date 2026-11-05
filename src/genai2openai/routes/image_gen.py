@@ -7,6 +7,7 @@ from flask import Blueprint, current_app, jsonify, request
 
 from ..auth import get_request_access_token
 from ..config import GENAI_IMAGE_STATIC_URL, GENAI_URL, build_genai_headers
+from ..upstream import _is_token_expired_error
 from ..usage import record_usage
 from . import SETTINGS_CONFIG_KEY
 
@@ -61,6 +62,16 @@ def download_and_save_image(url):
         return None, None
 
 
+def _post_image(payload, settings, access_token):
+    """发生图请求到上游 GenAI（同步 JSON，非流式）。"""
+    return requests.post(
+        GENAI_URL,
+        headers=build_genai_headers(settings, access_token),
+        json=payload,
+        timeout=300,
+    )
+
+
 @image_gen_bp.route('/v1/images/generations', methods=['POST'])
 def images_generations():
     """OpenAI Images API 兼容的图像生成接口。
@@ -109,16 +120,25 @@ def images_generations():
         logger.debug("image generation request: model=%s size=%s quality=%s n=%s has_ref=%s",
                      model, payload["size"], payload["quality"], payload["count"], bool(payload["imageBase64"]))
 
-        response = requests.post(
-            GENAI_URL,
-            headers=build_genai_headers(settings, access_token),
-            json=payload,
-            timeout=300,
-        )
+        response = _post_image(payload, settings, access_token)
         try:
             result = response.json()
         except ValueError:
             return jsonify({"error": f"GenAI upstream error: HTTP {response.status_code}"}), 502
+
+        # token 过期自动 CAS 重登录并重试一次（与 chat 链路一致；仅服务端 token 场景，
+        # 请求级 access_token 过期时由客户端自己更新凭据，不代为刷新）。
+        if isinstance(result, dict) and access_token is None and settings.account:
+            err_text = str(result.get("errMsg") or result.get("message") or "")
+            if response.status_code == 401 or _is_token_expired_error(err_text):
+                from ..auth import refresh_token
+                if refresh_token(settings, failed_token=settings.token):
+                    logger.info("image gen token expired; refreshed via CAS login, retrying once")
+                    response = _post_image(payload, settings, access_token)
+                    try:
+                        result = response.json()
+                    except ValueError:
+                        return jsonify({"error": f"GenAI upstream error: HTTP {response.status_code}"}), 502
 
         # 上游错误包：{"code":500,"errMsg":"..."}
         if isinstance(result, dict) and result.get("code") not in (None, 0, 200, "200"):
