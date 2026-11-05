@@ -37,8 +37,12 @@ def to_absolute_image_url(url):
     return f"{GENAI_IMAGE_STATIC_URL}{url.lstrip('/')}"
 
 
-def download_and_save_image(url):
-    """下载生成图片并保存到本地留存目录。
+def download_and_save_image(url, save=True):
+    """下载图片字节；save=True 时同时保存到本地留存目录。
+
+    Args:
+        url (str): 图片地址。
+        save (bool): 是否保存到 generated_images/（垫图参考传 False，避免混入生成留存）。
 
     Returns:
         tuple[str | None, bytes | None]: (本地保存路径, 图片字节)；下载或保存
@@ -50,6 +54,8 @@ def download_and_save_image(url):
             logger.warning("download generated image failed: HTTP %s", resp.status_code)
             return None, None
         image_bytes = resp.content
+        if not save:
+            return None, image_bytes
         os.makedirs(GENERATED_IMAGE_DIR, exist_ok=True)
         # basename 防路径穿越；上游文件名本身是 hash 命名，直接复用。
         filename = os.path.basename(url.rstrip("/").rsplit("/", 1)[-1]) or "image.png"
@@ -101,6 +107,13 @@ def images_generations():
         image_base64 = req_data.get("image_base64") or req_data.get("image")
         if isinstance(image_base64, str) and image_base64.startswith("data:"):
             image_base64 = image_base64.split(",", 1)[1]
+        # 也支持 image_url（http/https 图片地址）：代理下载转 base64，不走生成留存。
+        image_url = req_data.get("image_url")
+        if not image_base64 and isinstance(image_url, str) and image_url.startswith(("http://", "https://")):
+            _, image_bytes = download_and_save_image(image_url, save=False)
+            if image_bytes is None:
+                return jsonify({"error": f"Failed to download reference image from image_url: {image_url}"}), 400
+            image_base64 = base64.b64encode(image_bytes).decode("ascii")
 
         payload = {
             "chatInfo": prompt,

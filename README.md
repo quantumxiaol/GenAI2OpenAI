@@ -468,7 +468,7 @@ curl http://127.0.0.1:11435/v1/images/generations \
   -d '{"model": "gpt-image-2.5", "prompt": "一只在月光下的猫，扁平插画风格", "size": "1024x1024", "quality": "low"}'
 ```
 
-返回 `data[0].url` 为可直接访问的图片 URL（上游返回相对路径，代理已重写为绝对地址）；`size` / `quality`（low/medium/high）/ `style` / `output_format` / `n` 平铺透传；垫图用 `image_base64` 字段（纯 base64 或 data URL）。
+返回 `data[0].url` 为可直接访问的图片 URL（上游返回相对路径，代理已重写为绝对地址）；`size` / `quality`（low/medium/high）/ `style` / `output_format` / `n` 平铺透传；**垫图（以图生图）**：`image_base64`（纯 base64 或 data URL）或 `image_url`（http/https 图片地址，代理下载转 base64，不写入生成留存目录），二选一。2026-11-05 实测两种输入均生效（上游 `usage.input_tokens_details.image_tokens` 计入参考图，生成结果保持参考图构图与角色）。**目前仅支持单张参考图**：`imageBase64` 数组上游报"系统内部错误"，`imageBase64s` 复数字段被静默忽略，网页端多图字段名待抓包确认。注意 base64 后请求体需低于网关 ~900KB 上限，建议参考图先缩到 ≤512px。
 
 `response_format` 参数（默认 `url`）：
 
