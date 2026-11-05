@@ -468,7 +468,7 @@ curl http://127.0.0.1:11435/v1/images/generations \
   -d '{"model": "gpt-image-2.5", "prompt": "一只在月光下的猫，扁平插画风格", "size": "1024x1024", "quality": "low"}'
 ```
 
-返回 `data[0].url` 为可直接访问的图片 URL（上游返回相对路径，代理已重写为绝对地址）；`size` / `quality`（low/medium/high）/ `style` / `output_format` / `n` 平铺透传；**垫图（以图生图）**：`image_base64`（纯 base64 或 data URL）或 `image_url`（http/https 图片地址，代理下载转 base64，不写入生成留存目录），二选一。2026-11-05 实测两种输入均生效（上游 `usage.input_tokens_details.image_tokens` 计入参考图，生成结果保持参考图构图与角色）。**目前仅支持单张参考图**：`imageBase64` 数组上游报"系统内部错误"，`imageBase64s` 复数字段被静默忽略，网页端多图字段名待抓包确认。注意 base64 后请求体需低于网关 ~900KB 上限，建议参考图先缩到 ≤512px。
+返回 `data[0].url` 为可直接访问的图片 URL（上游返回相对路径，代理已重写为绝对地址）；`size` / `quality`（low/medium/high）/ `style` / `output_format` / `n` 平铺透传；**垫图（以图生图）**：单张 `image_base64` / `image_url`，或多张 `image_base64_list` / `image_url_list`（数组），base64 支持 data URL 前缀；URL 由代理下载转 base64（不写入生成留存目录）。**最多 4 张**（与网页端一致），多张时提示词可用「图1」「图2」指代关系。上游形态：单张 `imageBase64`=字符串，多张 `imageBase64List`（2026-11-05 网页端抓包确认）。实测：单张 `image_tokens=256`、双张 `=512`，生成结果保持参考图构图与角色。注意 base64 后请求体需低于网关 ~900KB 上限，建议参考图先缩到 ≤512px。
 
 `response_format` 参数（默认 `url`）：
 

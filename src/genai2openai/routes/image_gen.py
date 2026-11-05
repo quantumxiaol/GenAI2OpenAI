@@ -103,17 +103,35 @@ def images_generations():
                 "error": f"Unknown image model: {model}. Available: {sorted(IMAGE_MODEL_MAP)}"
             }), 400
 
-        # 参考图（垫图）：支持 base64 原文或 data URL，上游要求纯 base64 字符串。
-        image_base64 = req_data.get("image_base64") or req_data.get("image")
-        if isinstance(image_base64, str) and image_base64.startswith("data:"):
-            image_base64 = image_base64.split(",", 1)[1]
-        # 也支持 image_url（http/https 图片地址）：代理下载转 base64，不走生成留存。
-        image_url = req_data.get("image_url")
-        if not image_base64 and isinstance(image_url, str) and image_url.startswith(("http://", "https://")):
-            _, image_bytes = download_and_save_image(image_url, save=False)
+        # 参考图（垫图）：单张 image_base64/image_url，多张 image_base64_list/image_url_list。
+        # base64 支持 data URL 前缀；URL 由代理下载转 base64（不写入生成留存）。
+        # 上游形态（网页端抓包）：单张 imageBase64=字符串，多张 imageBase64=null + imageBase64List。
+        ref_images = []
+        single_b64 = req_data.get("image_base64") or req_data.get("image")
+        if isinstance(single_b64, str):
+            ref_images.append(single_b64)
+        for item in req_data.get("image_base64_list") or []:
+            if isinstance(item, str):
+                ref_images.append(item)
+        ref_images = [s.split(",", 1)[1] if s.startswith("data:") else s for s in ref_images]
+
+        ref_urls = []
+        if isinstance(req_data.get("image_url"), str):
+            ref_urls.append(req_data["image_url"])
+        for item in req_data.get("image_url_list") or []:
+            if isinstance(item, str):
+                ref_urls.append(item)
+        for url in ref_urls:
+            if not url.startswith(("http://", "https://")):
+                return jsonify({"error": f"Invalid image_url (http/https required): {url}"}), 400
+            _, image_bytes = download_and_save_image(url, save=False)
             if image_bytes is None:
-                return jsonify({"error": f"Failed to download reference image from image_url: {image_url}"}), 400
-            image_base64 = base64.b64encode(image_bytes).decode("ascii")
+                return jsonify({"error": f"Failed to download reference image from image_url: {url}"}), 400
+            ref_images.append(base64.b64encode(image_bytes).decode("ascii"))
+
+        # 与网页端一致：参考图最多 4 张；多张时提示词可用「图1」「图2」指代。
+        if len(ref_images) > 4:
+            return jsonify({"error": f"Too many reference images ({len(ref_images)}), max 4 (same as web UI)"}), 400
 
         payload = {
             "chatInfo": prompt,
@@ -126,12 +144,13 @@ def images_generations():
             "style": req_data.get("style", "vivid"),
             "outputFormat": req_data.get("output_format", "png"),
             "outputCompression": None,
-            "imageBase64": image_base64 or None,
+            "imageBase64": ref_images[0] if len(ref_images) == 1 else None,
+            "imageBase64List": ref_images if len(ref_images) > 1 else None,
             "rootAiType": "azure",
         }
         access_token = get_request_access_token(settings)
-        logger.debug("image generation request: model=%s size=%s quality=%s n=%s has_ref=%s",
-                     model, payload["size"], payload["quality"], payload["count"], bool(payload["imageBase64"]))
+        logger.debug("image generation request: model=%s size=%s quality=%s n=%s ref_images=%d",
+                     model, payload["size"], payload["quality"], payload["count"], len(ref_images))
 
         response = _post_image(payload, settings, access_token)
         try:
