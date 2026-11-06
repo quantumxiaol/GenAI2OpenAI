@@ -54,6 +54,7 @@ GenAI 是一个基于 Flask 的聊天机器人接口服务，兼容 OpenAI 的�
 | 图片输入（Vision）                        | ✅              | ✅             | 服务端自动上传图片并注入 `imageUrl/width/height`（本地/Azure 模型均已实测） |
 | 模型列表接口（`GET /v1/models`）          | ✅              | ✅             | 返回本项目映射后的可用模型列表                             |
 | 图像生成（`POST /v1/images/generations`） | ✅              | ✅ 已兼容      | 同步返回；相对路径重写为可访问的绝对 URL；usage 为上游真实值 |
+| 图像编辑（`POST /v1/images/edits`）       | ✅              | ✅ 已兼容      | multipart 文件上传转垫图通道；mask 不支持（上游无局部重绘能力） |
 | 认证头兼容（Bearer/API Key）              | ✅              | ✅             | 支持 `Authorization`、`X-Access-Token`、`api-key` 等       |
 | 联网搜索 / 深度思考                        | 无原生字段      | ✅ 已映射      | 模型名后缀 `-search` / `-thinking` / `-nothink` 或请求体 `net_go` / `thinking` 字段 |
 | Token 用量（usage）                        | ✅              | ✅ 部分        | `total_tokens` 为上游真实值；`prompt`/`completion` 分项为估算 |
@@ -469,6 +470,18 @@ curl http://127.0.0.1:11435/v1/images/generations \
 ```
 
 返回 `data[0].url` 为可直接访问的图片 URL（上游返回相对路径，代理已重写为绝对地址）；`size` / `quality`（low/medium/high）/ `style` / `output_format` / `n` 平铺透传；**垫图（以图生图）**：单张 `image_base64` / `image_url`，或多张 `image_base64_list` / `image_url_list`（数组），base64 支持 data URL 前缀；URL 由代理下载转 base64（不写入生成留存目录）。**最多 4 张**（与网页端一致），多张时提示词可用「图1」「图2」指代关系。上游形态：单张 `imageBase64`=字符串，多张 `imageBase64List`（2026-11-05 网页端抓包确认）。实测：单张 `image_tokens=256`、双张 `=512`，生成结果保持参考图构图与角色。注意 base64 后请求体需低于网关 ~900KB 上限，建议参考图先缩到 ≤512px。
+
+**`POST /v1/images/edits`（OpenAI Images Edits 兼容）**：multipart/form-data 文件上传方式做垫图，与 OpenAI SDK `images.edit()` 对齐——`image` 字段上传参考图文件（可重复多个，兼容 `image[]`），`prompt`/`model`/`n`/`size`/`quality`/`style`/`output_format`/`response_format` 走表单字段，主流程与 generations 共用。与 OpenAI 的差异：上游只有参考图生图能力，**mask 局部重绘不支持**（mask 文件会被忽略并记警告，语义为参考图重绘而非 inpainting）。
+
+```bash
+curl "$GENAI_API_BASE_URL/images/edits" \
+  -H "Authorization: Bearer $GENAI_API_KEY" \
+  -F "model=gpt-image-2.5" \
+  -F "prompt=把图一的人物放到图二的背景中" \
+  -F "quality=low" \
+  -F "image=@/path/to/ref1.png" \
+  -F "image=@/path/to/ref2.png"
+```
 
 `response_format` 参数（默认 `url`）：
 
