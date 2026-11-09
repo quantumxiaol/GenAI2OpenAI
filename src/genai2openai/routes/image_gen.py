@@ -137,9 +137,10 @@ def _run_image_generation(prompt, ai_type, model, ref_images, params, settings):
         return jsonify({"error": f"GenAI upstream error: HTTP {response.status_code}", "detail": result}), 502
 
     data = []
-    # OpenAI 风格 response_format：url（默认，直接给学校图片服务地址）/
-    # b64_json（代理下载转 base64，客户端不依赖学校图片服务的可访问性）。
-    response_format = params.get("response_format", "url")
+    # OpenAI 风格 response_format：默认 b64_json（与 gpt-image-1 官方行为一致），
+    # 图片内容随响应直接返回——url 模式要求客户端能访问 genaipic 图片服务，
+    # 校外客户端下载会挂起（2026-11-09 实测 dsh 症状）；url 仍可显式指定。
+    response_format = params.get("response_format", "b64_json")
     for item in result.get("data", []):
         if isinstance(item, dict) and item.get("url"):
             abs_url = to_absolute_image_url(item["url"])

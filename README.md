@@ -483,10 +483,10 @@ curl "$GENAI_API_BASE_URL/images/edits" \
   -F "image=@/path/to/ref2.png"
 ```
 
-`response_format` 参数（默认 `url`）：
+`response_format` 参数（**默认 `b64_json`**，与 OpenAI gpt-image-1 官方默认一致）：
 
-- `url`：返回学校图片服务的 URL。注意该服务主要面向校内，校外客户端可能打不开图片。
-- `b64_json`：代理下载图片后返回 `data[0].b64_json`（base64 编码的图片内容），客户端不依赖学校图片服务的可访问性。解码保存示例：`... | jq -r '.data[0].b64_json' | base64 -D > out.png`（macOS；Linux 用 `base64 -d`）。
+- `b64_json`（默认）：代理下载图片后返回 `data[0].b64_json`（base64 编码的图片内容），**客户端不依赖学校图片服务的可访问性**。校外客户端强烈推荐——`url` 模式要求客户端能访问 genaipic 图片服务，校外下载会挂起（2026-11-09 实测 dsh 症状）。解码保存示例：`... | jq -r '.data[0].b64_json' | base64 -D > out.png`（macOS；Linux 用 `base64 -d`）。
+- `url`：返回学校图片服务的绝对 URL，仅当客户端在校内/能访问 genaipic 时适用。
 
 **本地留存**：每次成功生图，代理都会把图片下载保存到启动目录的 `generated_images/`（已 gitignore，文件名沿用上游 hash 名），长期可用，不受学校静态目录时效影响。下载失败不影响 `url` 模式返回（仅记警告日志），`b64_json` 模式下载失败则返回 502。
 
